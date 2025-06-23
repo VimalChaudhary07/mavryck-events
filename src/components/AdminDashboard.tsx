@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star } from 'lucide-react';
+import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getAll, remove } from '../lib/db';
@@ -25,10 +25,38 @@ interface Message {
   message: string;
 }
 
+interface GalleryItem {
+  id: string;
+  title: string;
+  image_url: string;
+  category: string;
+  description?: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  image_url: string;
+}
+
+interface Testimonial {
+  id: string;
+  name: string;
+  role: string;
+  content: string;
+  rating: number;
+  avatar_url: string;
+}
+
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('events');
   const [events, setEvents] = useState<Event[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
 
@@ -38,12 +66,18 @@ export function AdminDashboard() {
 
   const loadData = async () => {
     try {
-      const [eventsData, messagesData] = await Promise.all([
+      const [eventsData, messagesData, galleryData, productsData, testimonialsData] = await Promise.all([
         getAll<Event>('event_requests'),
-        getAll<Message>('contact_messages')
+        getAll<Message>('contact_messages'),
+        getAll<GalleryItem>('gallery'),
+        getAll<Product>('products'),
+        getAll<Testimonial>('testimonials')
       ]);
       setEvents(eventsData || []);
       setMessages(messagesData || []);
+      setGalleryItems(galleryData || []);
+      setProducts(productsData || []);
+      setTestimonials(testimonialsData || []);
     } catch (error) {
       console.error('Failed to load data:', error);
       toast.error('Failed to load dashboard data');
@@ -72,6 +106,39 @@ export function AdminDashboard() {
     }
   };
 
+  const handleDeleteGalleryItem = async (itemId: string) => {
+    try {
+      await remove('gallery', itemId);
+      toast.success('Gallery item deleted successfully');
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete gallery item:', error);
+      toast.error('Failed to delete gallery item');
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      await remove('products', productId);
+      toast.success('Product deleted successfully');
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      toast.error('Failed to delete product');
+    }
+  };
+
+  const handleDeleteTestimonial = async (testimonialId: string) => {
+    try {
+      await remove('testimonials', testimonialId);
+      toast.success('Testimonial deleted successfully');
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete testimonial:', error);
+      toast.error('Failed to delete testimonial');
+    }
+  };
+
   const handleAddModalOpen = (type: 'gallery' | 'product' | 'testimonial') => {
     setAddModalType(type);
     setIsAddModalOpen(true);
@@ -92,7 +159,7 @@ export function AdminDashboard() {
               }`}
             >
               <Calendar className="w-5 h-5" />
-              Events
+              Events ({events.length})
             </button>
             <button
               onClick={() => setActiveTab('messages')}
@@ -103,29 +170,64 @@ export function AdminDashboard() {
               }`}
             >
               <MessageSquare className="w-5 h-5" />
-              Messages
+              Messages ({messages.length})
             </button>
             <button
-              onClick={() => handleAddModalOpen('gallery')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700`}
+              onClick={() => setActiveTab('gallery')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeTab === 'gallery'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
             >
               <Image className="w-5 h-5" />
-              Add to Gallery
+              Gallery ({galleryItems.length})
             </button>
             <button
-              onClick={() => handleAddModalOpen('product')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700`}
+              onClick={() => setActiveTab('products')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeTab === 'products'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
             >
               <Package className="w-5 h-5" />
-              Add Product
+              Products ({products.length})
             </button>
             <button
-              onClick={() => handleAddModalOpen('testimonial')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700`}
+              onClick={() => setActiveTab('testimonials')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                activeTab === 'testimonials'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
             >
               <Star className="w-5 h-5" />
-              Add Testimonial
+              Testimonials ({testimonials.length})
             </button>
+            <div className="border-t border-gray-700 pt-2">
+              <button
+                onClick={() => handleAddModalOpen('gallery')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+              >
+                <Image className="w-5 h-5" />
+                Add to Gallery
+              </button>
+              <button
+                onClick={() => handleAddModalOpen('product')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+              >
+                <Package className="w-5 h-5" />
+                Add Product
+              </button>
+              <button
+                onClick={() => handleAddModalOpen('testimonial')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+              >
+                <Star className="w-5 h-5" />
+                Add Testimonial
+              </button>
+            </div>
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -176,6 +278,9 @@ export function AdminDashboard() {
                       </div>
                     </motion.div>
                   ))}
+                  {events.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">No event requests yet.</p>
+                  )}
                 </div>
               </div>
             )}
@@ -206,6 +311,132 @@ export function AdminDashboard() {
                       </div>
                     </motion.div>
                   ))}
+                  {messages.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">No messages yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'gallery' && (
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h2 className="text-xl font-semibold text-white mb-6">Gallery Items</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {galleryItems.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-700 rounded-lg overflow-hidden"
+                    >
+                      <img
+                        src={item.image_url}
+                        alt={item.title}
+                        className="w-full h-48 object-cover"
+                      />
+                      <div className="p-4">
+                        <h3 className="text-white font-medium">{item.title}</h3>
+                        <p className="text-orange-500 text-sm">{item.category}</p>
+                        {item.description && (
+                          <p className="text-gray-400 text-sm mt-2">{item.description}</p>
+                        )}
+                        <button
+                          onClick={() => handleDeleteGalleryItem(item.id)}
+                          className="text-red-500 hover:text-red-400 mt-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {galleryItems.length === 0 && (
+                    <div className="col-span-full text-gray-400 text-center py-8">
+                      No gallery items yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'products' && (
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h2 className="text-xl font-semibold text-white mb-6">Products</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {products.map((product) => (
+                    <motion.div
+                      key={product.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-700 rounded-lg overflow-hidden"
+                    >
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-48 object-cover"
+                      />
+                      <div className="p-4">
+                        <h3 className="text-white font-medium">{product.name}</h3>
+                        <p className="text-orange-500 font-bold">{product.price}</p>
+                        <p className="text-gray-400 text-sm mt-2">{product.description}</p>
+                        <button
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="text-red-500 hover:text-red-400 mt-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {products.length === 0 && (
+                    <div className="col-span-full text-gray-400 text-center py-8">
+                      No products yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'testimonials' && (
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h2 className="text-xl font-semibold text-white mb-6">Testimonials</h2>
+                <div className="space-y-4">
+                  {testimonials.map((testimonial) => (
+                    <motion.div
+                      key={testimonial.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-700 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex gap-4">
+                          <img
+                            src={testimonial.avatar_url}
+                            alt={testimonial.name}
+                            className="w-16 h-16 rounded-full object-cover"
+                          />
+                          <div>
+                            <h3 className="text-white font-medium">{testimonial.name}</h3>
+                            <p className="text-orange-500 text-sm">{testimonial.role}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {[...Array(testimonial.rating)].map((_, i) => (
+                                <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                              ))}
+                            </div>
+                            <p className="text-gray-400 text-sm mt-2">{testimonial.content}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteTestimonial(testimonial.id)}
+                          className="text-red-500 hover:text-red-400 p-2"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {testimonials.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">No testimonials yet.</p>
+                  )}
                 </div>
               </div>
             )}

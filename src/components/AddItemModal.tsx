@@ -33,7 +33,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
           name: '',
           role: '',
           content: '',
-          rating: 5,
+          rating: '5',
           avatar_url: ''
         };
       default:
@@ -45,10 +45,18 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
     e.preventDefault();
     try {
       const collection = type === 'gallery' ? 'gallery' : type === 'product' ? 'products' : 'testimonials';
-      await add(collection, formData);
+      
+      // Process form data based on type
+      let processedData = { ...formData };
+      if (type === 'testimonial') {
+        processedData.rating = parseInt(formData.rating as string);
+      }
+      
+      await add(collection, processedData);
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully`);
       onSuccess();
       onClose();
+      
       // Reset form data
       setFormData(() => {
         switch (type) {
@@ -71,7 +79,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
               name: '',
               role: '',
               content: '',
-              rating: 5,
+              rating: '5',
               avatar_url: ''
             };
           default:
@@ -102,7 +110,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
         exit={{ scale: 0.95 }}
-        className="bg-gray-800 rounded-xl max-w-md w-full p-6"
+        className="bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">
@@ -124,7 +132,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <input
                   type="text"
                   id="title"
-                  value={formData.title}
+                  value={formData.title || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -134,7 +142,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
                 <select
                   id="category"
-                  value={formData.category}
+                  value={formData.category || 'Corporate'}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -157,7 +165,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <input
                   type="text"
                   id="name"
-                  value={formData.name}
+                  value={formData.name || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -168,8 +176,9 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <input
                   type="text"
                   id="price"
-                  value={formData.price}
+                  value={formData.price || ''}
                   onChange={handleChange}
+                  placeholder="e.g., ₹50,000"
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
                 />
@@ -184,7 +193,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <input
                   type="text"
                   id="name"
-                  value={formData.name}
+                  value={formData.name || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -195,24 +204,27 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <input
                   type="text"
                   id="role"
-                  value={formData.role}
+                  value={formData.role || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Rating</label>
-                <input
-                  type="number"
+                <label className="block text-sm font-medium text-gray-300 mb-2">Rating (1-5)</label>
+                <select
                   id="rating"
-                  min="1"
-                  max="5"
-                  value={formData.rating}
+                  value={formData.rating || '5'}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
-                />
+                >
+                  <option value="1">1 Star</option>
+                  <option value="2">2 Stars</option>
+                  <option value="3">3 Stars</option>
+                  <option value="4">4 Stars</option>
+                  <option value="5">5 Stars</option>
+                </select>
               </div>
             </>
           )}
@@ -224,7 +236,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
             <input
               type="url"
               id={type === 'testimonial' ? 'avatar_url' : 'image_url'}
-              value={formData[type === 'testimonial' ? 'avatar_url' : 'image_url']}
+              value={formData[type === 'testimonial' ? 'avatar_url' : 'image_url'] || ''}
               onChange={handleChange}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
               required
@@ -232,10 +244,12 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {type === 'testimonial' ? 'Testimonial Content' : 'Description'}
+            </label>
             <textarea
               id={type === 'testimonial' ? 'content' : 'description'}
-              value={formData[type === 'testimonial' ? 'content' : 'description']}
+              value={formData[type === 'testimonial' ? 'content' : 'description'] || ''}
               onChange={handleChange}
               rows={4}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"

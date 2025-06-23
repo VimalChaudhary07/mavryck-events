@@ -22,7 +22,7 @@ export function Navbar() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
               <Calendar className="h-8 w-8 text-orange-500" />
-              <span className="text-white font-bold text-xl">Festive.Finesse.Events</span>
+              <span className="text-white font-bold text-xl">mavryck_events</span>
             </Link>
           </div>
           

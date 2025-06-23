@@ -56,9 +56,9 @@ export function PrivacyPolicy() {
               <p className="text-gray-300">
                 If you have any questions about this Privacy Policy, please contact us at:
                 <br />
-                Email: privacy@festive.finesse.events
+                Email: mavryckevents@gmail.com
                 <br />
-                Phone: +91 1234567890
+                Phone: +91 7045712235
               </p>
             </section>
           </div>

@@ -70,7 +70,7 @@ export function Contact() {
                   mr.gupta881@gmail.com
                 </a>
                 <a href="mailto:festive.finesse.events@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
-                  festive.finesse.events@gmail.com
+                  mavryckevents@gmail.com
                 </a>
               </div>
             </motion.div>
@@ -93,6 +93,27 @@ export function Contact() {
               </div>
             </motion.div>
 
+              {/* Location Block */}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      className="flex items-start gap-4"
+    >
+      <div className="bg-orange-500/10 p-3 rounded-lg">
+        <MapPin className="w-6 h-6 text-orange-500" />
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-1">Location</h3>
+        <p className="text-gray-400">
+          MAHALAXMI & CHINCHPOKLI, MUMBAI, MAHARASHTRA.<br />
+          PIN CODE - 400011.<br />
+          LANDMARK - MINARVA TOWER.
+        </p>
+      </div>
+    </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -106,12 +127,12 @@ export function Contact() {
               <div>
                 <h3 className="text-lg font-semibold text-white mb-1">Social Media</h3>
                 <a 
-                  href="https://instagram.com/festive.finesse_event" 
+                  href="https://www.instagram.com/mavryck_events" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-orange-500 transition-colors"
                 >
-                  @festive.finesse_event
+                  @mavryck_events
                 </a>
               </div>
             </motion.div>
