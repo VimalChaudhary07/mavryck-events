@@ -9,6 +9,7 @@ interface EventsDB extends DBSchema {
       name: string;
       email: string;
       message: string;
+      viewed?: boolean;
     };
     indexes: { 'by-date': string };
   };
@@ -24,7 +25,7 @@ interface EventsDB extends DBSchema {
       date: string;
       guestCount: string;
       requirements: string;
-      status: 'pending' | 'completed';
+      status: 'pending' | 'ongoing' | 'completed';
     };
     indexes: { 'by-date': string };
   };
@@ -80,13 +81,40 @@ export async function initDB() {
   if (db) return db;
   
   try {
-    db = await openDB<EventsDB>('events-db', 1, {
-      upgrade(db) {
+    db = await openDB<EventsDB>('events-db', 2, {
+      async upgrade(db, oldVersion, newVersion, transaction) {
         createStore(db, 'contact_messages');
         createStore(db, 'event_requests');
         createStore(db, 'gallery');
         createStore(db, 'products');
         createStore(db, 'testimonials');
+        
+        // Migration for existing data to add new fields
+        if (oldVersion < 2) {
+          // Add viewed field to existing messages
+          if (db.objectStoreNames.contains('contact_messages')) {
+            const store = transaction.objectStore('contact_messages');
+            const messages = await store.getAll();
+            for (const message of messages) {
+              if (message.viewed === undefined) {
+                message.viewed = false;
+                await store.put(message);
+              }
+            }
+          }
+          
+          // Update event status for existing events
+          if (db.objectStoreNames.contains('event_requests')) {
+            const store = transaction.objectStore('event_requests');
+            const events = await store.getAll();
+            for (const event of events) {
+              if (!event.status || event.status === 'pending') {
+                event.status = 'pending';
+                await store.put(event);
+              }
+            }
+          }
+        }
       },
     });
     return db;

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit } from 'lucide-react';
+import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { getAll, remove } from '../lib/db';
+import { getAll, remove, update } from '../lib/db';
 import { AddItemModal } from './AddItemModal';
 import { EditItemModal } from './EditItemModal';
+import { EventDetailsModal } from './EventDetailsModal';
+import { MessageDetailsModal } from './MessageDetailsModal';
 import { AdminSettings } from './AdminSettings';
 
 interface Event {
@@ -16,7 +18,8 @@ interface Event {
   date: string;
   guestCount: string;
   requirements: string;
-  status: 'pending' | 'completed';
+  status: 'pending' | 'ongoing' | 'completed';
+  created_at?: string;
 }
 
 interface Message {
@@ -24,6 +27,8 @@ interface Message {
   name: string;
   email: string;
   message: string;
+  created_at?: string;
+  viewed?: boolean;
 }
 
 interface GalleryItem {
@@ -53,6 +58,8 @@ interface Testimonial {
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('events');
+  const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'pending' | 'ongoing' | 'completed'>('all');
+  const [messageFilter, setMessageFilter] = useState<'all' | 'new' | 'viewed'>('all');
   const [events, setEvents] = useState<Event[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
@@ -60,9 +67,13 @@ export function AdminDashboard() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
+  const [isMessageDetailsOpen, setIsMessageDetailsOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editModalType, setEditModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
 
   useEffect(() => {
     loadData();
@@ -143,6 +154,36 @@ export function AdminDashboard() {
     }
   };
 
+  const handleEventStatusChange = async (eventId: string, newStatus: 'pending' | 'ongoing' | 'completed') => {
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (event) {
+        await update('event_requests', eventId, { ...event, status: newStatus });
+        toast.success('Event status updated successfully');
+        loadData();
+        setSelectedEvent(prev => prev ? { ...prev, status: newStatus } : null);
+      }
+    } catch (error) {
+      console.error('Failed to update event status:', error);
+      toast.error('Failed to update event status');
+    }
+  };
+
+  const handleMarkMessageAsViewed = async (messageId: string) => {
+    try {
+      const message = messages.find(m => m.id === messageId);
+      if (message) {
+        await update('contact_messages', messageId, { ...message, viewed: true });
+        toast.success('Message marked as viewed');
+        loadData();
+        setSelectedMessage(prev => prev ? { ...prev, viewed: true } : null);
+      }
+    } catch (error) {
+      console.error('Failed to mark message as viewed:', error);
+      toast.error('Failed to update message status');
+    }
+  };
+
   const handleAddModalOpen = (type: 'gallery' | 'product' | 'testimonial') => {
     setAddModalType(type);
     setIsAddModalOpen(true);
@@ -154,9 +195,62 @@ export function AdminDashboard() {
     setIsEditModalOpen(true);
   };
 
+  const handleEventClick = (event: Event) => {
+    setSelectedEvent(event);
+    setIsEventDetailsOpen(true);
+  };
+
+  const handleMessageClick = (message: Message) => {
+    setSelectedMessage(message);
+    setIsMessageDetailsOpen(true);
+  };
+
   // Helper function to ensure valid rating for star rendering
   const getValidRating = (rating: number): number => {
     return Math.max(1, Math.min(5, Math.floor(rating) || 1));
+  };
+
+  // Filter events by status
+  const filteredEvents = eventStatusFilter === 'all' 
+    ? events 
+    : events.filter(event => event.status === eventStatusFilter);
+
+  // Filter messages by viewed status
+  const filteredMessages = messageFilter === 'all' 
+    ? messages 
+    : messageFilter === 'new' 
+      ? messages.filter(message => !message.viewed)
+      : messages.filter(message => message.viewed);
+
+  // Count events by status
+  const eventCounts = {
+    pending: events.filter(e => e.status === 'pending').length,
+    ongoing: events.filter(e => e.status === 'ongoing').length,
+    completed: events.filter(e => e.status === 'completed').length,
+  };
+
+  // Count messages by status
+  const messageCounts = {
+    new: messages.filter(m => !m.viewed).length,
+    viewed: messages.filter(m => m.viewed).length,
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'text-yellow-400 bg-yellow-400/10';
+      case 'ongoing': return 'text-blue-400 bg-blue-400/10';
+      case 'completed': return 'text-green-400 bg-green-400/10';
+      default: return 'text-gray-400 bg-gray-400/10';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'New Request';
+      case 'ongoing': return 'Ongoing';
+      case 'completed': return 'Completed';
+      default: return status;
+    }
   };
 
   return (
@@ -186,6 +280,11 @@ export function AdminDashboard() {
             >
               <MessageSquare className="w-5 h-5" />
               Messages ({messages.length})
+              {messageCounts.new > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                  {messageCounts.new}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('gallery')}
@@ -260,41 +359,119 @@ export function AdminDashboard() {
           <div className="flex-1">
             {activeTab === 'events' && (
               <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-6">Event Requests</h2>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">Event Requests</h2>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEventStatusFilter('all')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        eventStatusFilter === 'all'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All ({events.length})
+                    </button>
+                    <button
+                      onClick={() => setEventStatusFilter('pending')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        eventStatusFilter === 'pending'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      New ({eventCounts.pending})
+                    </button>
+                    <button
+                      onClick={() => setEventStatusFilter('ongoing')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        eventStatusFilter === 'ongoing'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Ongoing ({eventCounts.ongoing})
+                    </button>
+                    <button
+                      onClick={() => setEventStatusFilter('completed')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        eventStatusFilter === 'completed'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Completed ({eventCounts.completed})
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-4">
-                  {events.map((event) => (
+                  {filteredEvents.map((event) => (
                     <motion.div
                       key={event.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg p-4"
+                      className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium text-white">{event.name}</h3>
-                          <p className="text-gray-400">{event.email}</p>
-                          <p className="text-gray-400">{event.phone}</p>
-                          <p className="text-orange-500 mt-2">
-                            {event.eventType} - {event.date}
-                          </p>
-                          <p className="text-gray-300 mt-2">
-                            Guests: {event.guestCount}
-                          </p>
-                          {event.requirements && (
-                            <p className="text-gray-400 mt-2">{event.requirements}</p>
-                          )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-medium text-white">{event.name}</h3>
+                            <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                              {getStatusLabel(event.status)}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-400">Email: </span>
+                              <span className="text-gray-300">{event.email}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Phone: </span>
+                              <span className="text-gray-300">{event.phone}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Event: </span>
+                              <span className="text-orange-500 capitalize">{event.eventType}</span>
+                            </div>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteEvent(event.id)}
-                          className="text-red-500 hover:text-red-400 p-2"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={() => handleEventClick(event)}
+                            className="text-blue-500 hover:text-blue-400 p-2"
+                            title="View Details"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </button>
+                          <a
+                            href={`tel:${event.phone}`}
+                            className="text-green-500 hover:text-green-400 p-2"
+                            title="Call"
+                          >
+                            <Phone className="w-5 h-5" />
+                          </a>
+                          <a
+                            href={`mailto:${event.email}`}
+                            className="text-orange-500 hover:text-orange-400 p-2"
+                            title="Email"
+                          >
+                            <Mail className="w-5 h-5" />
+                          </a>
+                          <button
+                            onClick={() => handleDeleteEvent(event.id)}
+                            className="text-red-500 hover:text-red-400 p-2"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
-                  {events.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">No event requests yet.</p>
+                  {filteredEvents.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">
+                      No {eventStatusFilter === 'all' ? '' : eventStatusFilter} events found.
+                    </p>
                   )}
                 </div>
               </div>
@@ -302,32 +479,104 @@ export function AdminDashboard() {
 
             {activeTab === 'messages' && (
               <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-6">Contact Messages</h2>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">Contact Messages</h2>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setMessageFilter('all')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        messageFilter === 'all'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All ({messages.length})
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('new')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        messageFilter === 'new'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      New ({messageCounts.new})
+                      {messageCounts.new > 0 && (
+                        <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                          {messageCounts.new}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setMessageFilter('viewed')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        messageFilter === 'viewed'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Viewed ({messageCounts.viewed})
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-4">
-                  {messages.map((message) => (
+                  {filteredMessages.map((message) => (
                     <motion.div
                       key={message.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg p-4"
+                      className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium text-white">{message.name}</h3>
-                          <p className="text-gray-400">{message.email}</p>
-                          <p className="text-gray-300 mt-2">{message.message}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-medium text-white">{message.name}</h3>
+                            <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              message.viewed 
+                                ? 'text-green-400 bg-green-400/10' 
+                                : 'text-yellow-400 bg-yellow-400/10'
+                            }`}>
+                              {message.viewed ? 'Viewed' : 'New'}
+                            </div>
+                          </div>
+                          <p className="text-gray-400 mb-2">{message.email}</p>
+                          <p className="text-gray-300 text-sm line-clamp-2">
+                            {message.message.length > 100 
+                              ? `${message.message.substring(0, 100)}...` 
+                              : message.message
+                            }
+                          </p>
                         </div>
-                        <button
-                          onClick={() => handleDeleteMessage(message.id)}
-                          className="text-red-500 hover:text-red-400 p-2"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={() => handleMessageClick(message)}
+                            className="text-blue-500 hover:text-blue-400 p-2"
+                            title="View Details"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </button>
+                          <a
+                            href={`mailto:${message.email}`}
+                            className="text-orange-500 hover:text-orange-400 p-2"
+                            title="Reply"
+                          >
+                            <Mail className="w-5 h-5" />
+                          </a>
+                          <button
+                            onClick={() => handleDeleteMessage(message.id)}
+                            className="text-red-500 hover:text-red-400 p-2"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
-                  {messages.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">No messages yet.</p>
+                  {filteredMessages.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">
+                      No {messageFilter === 'all' ? '' : messageFilter} messages found.
+                    </p>
                   )}
                 </div>
               </div>
@@ -501,6 +750,26 @@ export function AdminDashboard() {
           setEditingItem(null);
         }}
         onSuccess={loadData}
+      />
+
+      <EventDetailsModal
+        event={selectedEvent}
+        isOpen={isEventDetailsOpen}
+        onClose={() => {
+          setIsEventDetailsOpen(false);
+          setSelectedEvent(null);
+        }}
+        onStatusChange={handleEventStatusChange}
+      />
+
+      <MessageDetailsModal
+        message={selectedMessage}
+        isOpen={isMessageDetailsOpen}
+        onClose={() => {
+          setIsMessageDetailsOpen(false);
+          setSelectedMessage(null);
+        }}
+        onMarkAsViewed={handleMarkMessageAsViewed}
       />
     </div>
   );
