@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Star, ArrowRight, ArrowLeft, ExternalLink } from 'lucide-react';
 import { getAll } from '../lib/db';
 
 interface Product {
@@ -26,6 +26,7 @@ export function GalleryAndProducts() {
   const [showLightbox, setShowLightbox] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
+  const [googlePhotosUrl, setGooglePhotosUrl] = useState('https://photos.google.com/share/your-album-link');
 
   useEffect(() => {
     const loadData = async () => {
@@ -41,6 +42,19 @@ export function GalleryAndProducts() {
       }
     };
     loadData();
+
+    // Load Google Photos URL from settings
+    const savedSettings = localStorage.getItem('siteSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        if (settings.business?.contact?.googlePhotosUrl) {
+          setGooglePhotosUrl(settings.business.contact.googlePhotosUrl);
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    }
   }, []);
 
   const filteredImages = selectedCategory === 'All'
@@ -67,6 +81,10 @@ export function GalleryAndProducts() {
   const handleImageClick = (index: number) => {
     setCurrentImageIndex(index);
     setShowLightbox(true);
+  };
+
+  const handleViewMoreClick = () => {
+    window.open(googlePhotosUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -144,34 +162,61 @@ export function GalleryAndProducts() {
           </div>
           
           {filteredImages.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredImages.map((image, index) => (
-                <div
-                  key={image.id}
-                  onClick={() => handleImageClick(index)}
-                  className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
-                >
-                  <img
-                    src={image.image_url}
-                    alt={image.title}
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <h3 className="text-xl font-semibold text-white">{image.title}</h3>
-                      <p className="text-orange-500">{image.category}</p>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {filteredImages.map((image, index) => (
+                  <div
+                    key={image.id}
+                    onClick={() => handleImageClick(index)}
+                    className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
+                  >
+                    <img
+                      src={image.image_url}
+                      alt={image.title}
+                      className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute bottom-0 left-0 right-0 p-6">
+                        <h3 className="text-xl font-semibold text-white">{image.title}</h3>
+                        <p className="text-orange-500">{image.category}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              {/* View More Button */}
+              <div className="text-center mt-12">
+                <button
+                  onClick={handleViewMoreClick}
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                >
+                  <span>View More Photos</span>
+                  <ExternalLink className="w-6 h-6" />
+                </button>
+                <p className="text-gray-400 text-sm mt-3">
+                  Explore our complete photo collection on Google Photos
+                </p>
+              </div>
+            </>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-lg">
+              <p className="text-gray-400 text-lg mb-8">
                 {selectedCategory === 'All' 
                   ? 'No gallery items available yet.' 
                   : `No ${selectedCategory} events in gallery yet.`
                 }
+              </p>
+              {/* Show View More button even when no local gallery items */}
+              <button
+                onClick={handleViewMoreClick}
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+              >
+                <span>View Our Photo Collection</span>
+                <ExternalLink className="w-6 h-6" />
+              </button>
+              <p className="text-gray-400 text-sm mt-3">
+                Explore our complete photo collection on Google Photos
               </p>
             </div>
           )}

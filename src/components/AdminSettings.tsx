@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save } from 'lucide-react';
+import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAll, add } from '../lib/db';
+import * as XLSX from 'xlsx';
 
 const SETTINGS_KEY = 'siteSettings';
 
@@ -22,7 +24,8 @@ export function AdminSettings() {
         email: 'contact@festive.finesse.events',
         phone: '+91 1234567890',
         address: '123 Event Street, City, State, India',
-        website: 'https://festive.finesse.events'
+        website: 'https://festive.finesse.events',
+        googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
       }
     },
     security: {
@@ -108,6 +111,102 @@ export function AdminSettings() {
     }));
   };
 
+  const handleBackupData = async () => {
+    setIsLoading(true);
+    try {
+      // Get all data from IndexedDB
+      const [events, messages, gallery, products, testimonials] = await Promise.all([
+        getAll('event_requests'),
+        getAll('contact_messages'),
+        getAll('gallery'),
+        getAll('products'),
+        getAll('testimonials')
+      ]);
+
+      // Create workbook with multiple sheets
+      const workbook = XLSX.utils.book_new();
+
+      // Add Events sheet
+      const eventsSheet = XLSX.utils.json_to_sheet(events);
+      XLSX.utils.book_append_sheet(workbook, eventsSheet, 'Event Requests');
+
+      // Add Messages sheet
+      const messagesSheet = XLSX.utils.json_to_sheet(messages);
+      XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
+
+      // Add Gallery sheet
+      const gallerySheet = XLSX.utils.json_to_sheet(gallery);
+      XLSX.utils.book_append_sheet(workbook, gallerySheet, 'Gallery');
+
+      // Add Products sheet
+      const productsSheet = XLSX.utils.json_to_sheet(products);
+      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products');
+
+      // Add Testimonials sheet
+      const testimonialsSheet = XLSX.utils.json_to_sheet(testimonials);
+      XLSX.utils.book_append_sheet(workbook, testimonialsSheet, 'Testimonials');
+
+      // Generate filename with current date
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `mavryck-events-backup-${date}.xlsx`;
+
+      // Download the file
+      XLSX.writeFile(workbook, filename);
+      
+      toast.success('Backup created successfully!');
+    } catch (error) {
+      console.error('Failed to create backup:', error);
+      toast.error('Failed to create backup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRestoreData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+
+      // Process each sheet
+      const sheets = ['Event Requests', 'Contact Messages', 'Gallery', 'Products', 'Testimonials'];
+      const collections = ['event_requests', 'contact_messages', 'gallery', 'products', 'testimonials'];
+
+      for (let i = 0; i < sheets.length; i++) {
+        const sheetName = sheets[i];
+        const collection = collections[i];
+        
+        if (workbook.SheetNames.includes(sheetName)) {
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+          // Add each item to the database
+          for (const item of jsonData) {
+            try {
+              await add(collection, item);
+            } catch (error) {
+              console.warn(`Failed to restore item in ${collection}:`, error);
+            }
+          }
+        }
+      }
+
+      toast.success('Data restored successfully!');
+      // Refresh the page to show restored data
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to restore data:', error);
+      toast.error('Failed to restore data');
+    } finally {
+      setIsLoading(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="bg-gray-800 rounded-xl p-6">
       <div className="flex items-center gap-3 mb-8">
@@ -115,7 +214,7 @@ export function AdminSettings() {
         <h2 className="text-xl font-semibold text-white">Settings</h2>
       </div>
 
-      <div className="flex gap-4 mb-8">
+      <div className="flex gap-4 mb-8 flex-wrap">
         <button
           onClick={() => setActiveSection('business')}
           className={`px-4 py-2 rounded-lg transition-colors ${
@@ -125,6 +224,16 @@ export function AdminSettings() {
           }`}
         >
           Business Settings
+        </button>
+        <button
+          onClick={() => setActiveSection('backup')}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            activeSection === 'backup'
+              ? 'bg-orange-500 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          Backup & Restore
         </button>
         <button
           onClick={() => setActiveSection('security')}
@@ -209,6 +318,96 @@ export function AdminSettings() {
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
+                <input
+                  type="url"
+                  value={settings.business.contact.googlePhotosUrl}
+                  onChange={(e) => handleBusinessSettingChange('contact', 'googlePhotosUrl', e.target.value)}
+                  placeholder="https://photos.google.com/share/your-album-link"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                />
+                <p className="text-sm text-gray-400 mt-1">
+                  This URL will be used for the "View More" button in the gallery section
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : activeSection === 'backup' ? (
+        <div className="space-y-8">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Database className="w-5 h-5 text-orange-500" />
+              <h3 className="text-lg font-medium text-white">Data Backup & Restore</h3>
+            </div>
+            <p className="text-gray-400 mb-6">
+              Create backups of all your data including events, messages, gallery, products, and testimonials. 
+              You can also restore data from a previously created backup file.
+            </p>
+            
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Backup Section */}
+              <div className="bg-gray-700/50 rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Download className="w-6 h-6 text-green-500" />
+                  <h4 className="text-lg font-medium text-white">Create Backup</h4>
+                </div>
+                <p className="text-gray-400 mb-4">
+                  Download all your data as an Excel file. This includes:
+                </p>
+                <ul className="text-sm text-gray-400 mb-6 space-y-1">
+                  <li>• Event Requests</li>
+                  <li>• Contact Messages</li>
+                  <li>• Gallery Items</li>
+                  <li>• Products</li>
+                  <li>• Testimonials</li>
+                </ul>
+                <button
+                  onClick={handleBackupData}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Create Backup
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Restore Section */}
+              <div className="bg-gray-700/50 rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Upload className="w-6 h-6 text-blue-500" />
+                  <h4 className="text-lg font-medium text-white">Restore Data</h4>
+                </div>
+                <p className="text-gray-400 mb-4">
+                  Upload a backup file to restore your data. This will add the data to your existing content.
+                </p>
+                <div className="mb-4">
+                  <p className="text-sm text-yellow-400 mb-2">⚠️ Important Notes:</p>
+                  <ul className="text-xs text-gray-400 space-y-1">
+                    <li>• Data will be added to existing content</li>
+                    <li>• Duplicate entries may be created</li>
+                    <li>• Only Excel (.xlsx) files are supported</li>
+                  </ul>
+                </div>
+                <label className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors cursor-pointer">
+                  <Upload className="w-5 h-5" />
+                  Choose Backup File
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={handleRestoreData}
+                    className="hidden"
+                    disabled={isLoading}
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -275,7 +474,7 @@ export function AdminSettings() {
       <div className="flex justify-end mt-8">
         <button
           onClick={activeSection === 'business' ? handleSaveSettings : handlePasswordChange}
-          disabled={isLoading}
+          disabled={isLoading || activeSection === 'backup'}
           className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50"
         >
           {isLoading ? (
@@ -285,7 +484,7 @@ export function AdminSettings() {
               {activeSection === 'business' ? <Save className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
             </>
           )}
-          {activeSection === 'business' ? 'Save Changes' : 'Update Password'}
+          {activeSection === 'business' ? 'Save Changes' : activeSection === 'security' ? 'Update Password' : ''}
         </button>
       </div>
     </div>
