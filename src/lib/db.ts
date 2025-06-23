@@ -82,7 +82,7 @@ export async function initDB() {
   
   try {
     db = await openDB<EventsDB>('events-db', 2, {
-      upgrade(db, oldVersion) {
+      async upgrade(db, oldVersion, newVersion, transaction) {
         createStore(db, 'contact_messages');
         createStore(db, 'event_requests');
         createStore(db, 'gallery');
@@ -93,30 +93,26 @@ export async function initDB() {
         if (oldVersion < 2) {
           // Add viewed field to existing messages
           if (db.objectStoreNames.contains('contact_messages')) {
-            const transaction = db.transaction(['contact_messages'], 'readwrite');
             const store = transaction.objectStore('contact_messages');
-            store.getAll().then(messages => {
-              messages.forEach(message => {
-                if (message.viewed === undefined) {
-                  message.viewed = false;
-                  store.put(message);
-                }
-              });
-            });
+            const messages = await store.getAll();
+            for (const message of messages) {
+              if (message.viewed === undefined) {
+                message.viewed = false;
+                await store.put(message);
+              }
+            }
           }
           
           // Update event status for existing events
           if (db.objectStoreNames.contains('event_requests')) {
-            const transaction = db.transaction(['event_requests'], 'readwrite');
             const store = transaction.objectStore('event_requests');
-            store.getAll().then(events => {
-              events.forEach(event => {
-                if (!event.status || event.status === 'pending') {
-                  event.status = 'pending';
-                  store.put(event);
-                }
-              });
-            });
+            const events = await store.getAll();
+            for (const event of events) {
+              if (!event.status || event.status === 'pending') {
+                event.status = 'pending';
+                await store.put(event);
+              }
+            }
           }
         }
       },
