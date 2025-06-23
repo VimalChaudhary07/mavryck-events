@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar } from 'lucide-react';
+import { X, Calendar, Phone, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { add } from '../lib/db';
@@ -65,6 +65,14 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
     });
   };
 
+  const handleDirectContact = (type: 'phone' | 'email') => {
+    if (type === 'phone') {
+      window.open('tel:+917045712235', '_self');
+    } else {
+      window.open('mailto:mavryckevents@gmail.com', '_self');
+    }
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -97,6 +105,34 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
                 <X className="w-6 h-6" />
               </button>
             </div>
+          </div>
+
+          {/* Direct Contact Options */}
+          <div className="p-6 border-b border-gray-700">
+            <h3 className="text-lg font-medium text-white mb-4">Need Immediate Assistance?</h3>
+            <div className="flex gap-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleDirectContact('phone')}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Phone className="w-5 h-5" />
+                Call Now
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleDirectContact('email')}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Mail className="w-5 h-5" />
+                Email Us
+              </motion.button>
+            </div>
+            <p className="text-gray-400 text-sm mt-2">
+              Or fill out the form below and we'll get back to you within 24 hours
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
