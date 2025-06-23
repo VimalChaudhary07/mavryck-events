@@ -154,6 +154,11 @@ export function AdminDashboard() {
     setIsEditModalOpen(true);
   };
 
+  // Helper function to ensure valid rating for star rendering
+  const getValidRating = (rating: number): number => {
+    return Math.max(1, Math.min(5, Math.floor(rating) || 1));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -444,7 +449,7 @@ export function AdminDashboard() {
                             <h3 className="text-white font-medium">{testimonial.name}</h3>
                             <p className="text-orange-500 text-sm">{testimonial.role}</p>
                             <div className="flex items-center gap-1 mt-1">
-                              {[...Array(testimonial.rating)].map((_, i) => (
+                              {[...Array(getValidRating(testimonial.rating))].map((_, i) => (
                                 <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
                               ))}
                             </div>

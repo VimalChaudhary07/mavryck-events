@@ -66,7 +66,7 @@ export function Testimonials() {
               </div>
 
               <div className="flex items-center gap-1">
-                {[...Array(testimonial.rating)].map((_, i) => (
+                {[...Array(Math.max(0, testimonial.rating || 0))].map((_, i) => (
                   <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
                 ))}
               </div>
