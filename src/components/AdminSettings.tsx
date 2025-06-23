@@ -220,6 +220,12 @@ export function AdminSettings() {
     }
   };
 
+  // Helper function to ensure valid rating
+  const getValidRating = (rating: any): number => {
+    const numRating = parseInt(rating);
+    return Math.max(1, Math.min(5, numRating || 1));
+  };
+
   const handleRestoreData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -283,7 +289,7 @@ export function AdminSettings() {
                   name: item['Name'] || '',
                   role: item['Role'] || '',
                   content: item['Content'] || '',
-                  rating: parseInt(item['Rating']) || 5,
+                  rating: getValidRating(item['Rating']),
                   avatar_url: item['Avatar URL'] || ''
                 };
               }
