@@ -17,7 +17,7 @@ export function Footer() {
             </p>
             <div className="flex space-x-4">
               <a 
-                href="https://instagram.com/festive.finesse_event" 
+                href="https://www.instagram.com/mavryck_events" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-orange-500 transition-colors"
@@ -85,12 +85,12 @@ export function Footer() {
               <li className="flex items-center gap-3">
                 <Instagram className="w-5 h-5 text-orange-500" />
                 <a 
-                  href="https://instagram.com/festive.finesse_event" 
+                  href="https://www.instagram.com/mavryck_events" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-orange-500 transition-colors"
                 >
-                  @festive.finesse_event
+                  @mavryck_event
                 </a>
               </li>
             </ul>
