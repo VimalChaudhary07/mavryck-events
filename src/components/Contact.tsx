@@ -70,7 +70,7 @@ export function Contact() {
                   mr.gupta881@gmail.com
                 </a>
                 <a href="mailto:festive.finesse.events@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
-                  festive.finesse.events@gmail.com
+                  mavryckevents@gmail.com
                 </a>
               </div>
             </motion.div>
@@ -106,12 +106,12 @@ export function Contact() {
               <div>
                 <h3 className="text-lg font-semibold text-white mb-1">Social Media</h3>
                 <a 
-                  href="https://instagram.com/festive.finesse_event" 
+                  href="https://www.instagram.com/mavryck_events" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-orange-500 transition-colors"
                 >
-                  @festive.finesse_event
+                  @mavryck_events
                 </a>
               </div>
             </motion.div>
