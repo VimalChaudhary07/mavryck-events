@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getAll, remove } from '../lib/db';
 import { AddItemModal } from './AddItemModal';
+import { EditItemModal } from './EditItemModal';
 import { AdminSettings } from './AdminSettings';
 
 interface Event {
@@ -58,7 +59,10 @@ export function AdminDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
+  const [editModalType, setEditModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -142,6 +146,12 @@ export function AdminDashboard() {
   const handleAddModalOpen = (type: 'gallery' | 'product' | 'testimonial') => {
     setAddModalType(type);
     setIsAddModalOpen(true);
+  };
+
+  const handleEditModalOpen = (type: 'gallery' | 'product' | 'testimonial', item: any) => {
+    setEditModalType(type);
+    setEditingItem(item);
+    setIsEditModalOpen(true);
   };
 
   return (
@@ -340,12 +350,20 @@ export function AdminDashboard() {
                         {item.description && (
                           <p className="text-gray-400 text-sm mt-2">{item.description}</p>
                         )}
-                        <button
-                          onClick={() => handleDeleteGalleryItem(item.id)}
-                          className="text-red-500 hover:text-red-400 mt-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleEditModalOpen('gallery', item)}
+                            className="text-blue-500 hover:text-blue-400"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteGalleryItem(item.id)}
+                            className="text-red-500 hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
@@ -378,12 +396,20 @@ export function AdminDashboard() {
                         <h3 className="text-white font-medium">{product.name}</h3>
                         <p className="text-orange-500 font-bold">{product.price}</p>
                         <p className="text-gray-400 text-sm mt-2">{product.description}</p>
-                        <button
-                          onClick={() => handleDeleteProduct(product.id)}
-                          className="text-red-500 hover:text-red-400 mt-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleEditModalOpen('product', product)}
+                            className="text-blue-500 hover:text-blue-400"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="text-red-500 hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
@@ -425,12 +451,20 @@ export function AdminDashboard() {
                             <p className="text-gray-400 text-sm mt-2">{testimonial.content}</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteTestimonial(testimonial.id)}
-                          className="text-red-500 hover:text-red-400 p-2"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditModalOpen('testimonial', testimonial)}
+                            className="text-blue-500 hover:text-blue-400 p-2"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTestimonial(testimonial.id)}
+                            className="text-red-500 hover:text-red-400 p-2"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
@@ -450,6 +484,17 @@ export function AdminDashboard() {
         type={addModalType}
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+        onSuccess={loadData}
+      />
+
+      <EditItemModal
+        type={editModalType}
+        item={editingItem}
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingItem(null);
+        }}
         onSuccess={loadData}
       />
     </div>

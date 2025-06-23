@@ -126,25 +126,83 @@ export function AdminSettings() {
       // Create workbook with multiple sheets
       const workbook = XLSX.utils.book_new();
 
-      // Add Events sheet
-      const eventsSheet = XLSX.utils.json_to_sheet(events);
-      XLSX.utils.book_append_sheet(workbook, eventsSheet, 'Event Requests');
+      // Add Events sheet - ensure data is properly formatted
+      if (events && events.length > 0) {
+        const eventsSheet = XLSX.utils.json_to_sheet(events.map(event => ({
+          ID: event.id || '',
+          Name: event.name || '',
+          Email: event.email || '',
+          Phone: event.phone || '',
+          'Event Type': event.eventType || '',
+          Date: event.date || '',
+          'Guest Count': event.guestCount || '',
+          Requirements: event.requirements || '',
+          Status: event.status || '',
+          'Created At': event.created_at || ''
+        })));
+        XLSX.utils.book_append_sheet(workbook, eventsSheet, 'Event Requests');
+      }
 
       // Add Messages sheet
-      const messagesSheet = XLSX.utils.json_to_sheet(messages);
-      XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
+      if (messages && messages.length > 0) {
+        const messagesSheet = XLSX.utils.json_to_sheet(messages.map(message => ({
+          ID: message.id || '',
+          Name: message.name || '',
+          Email: message.email || '',
+          Message: message.message || '',
+          'Created At': message.created_at || ''
+        })));
+        XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
+      }
 
       // Add Gallery sheet
-      const gallerySheet = XLSX.utils.json_to_sheet(gallery);
-      XLSX.utils.book_append_sheet(workbook, gallerySheet, 'Gallery');
+      if (gallery && gallery.length > 0) {
+        const gallerySheet = XLSX.utils.json_to_sheet(gallery.map(item => ({
+          ID: item.id || '',
+          Title: item.title || '',
+          'Image URL': item.image_url || '',
+          Category: item.category || '',
+          Description: item.description || '',
+          'Created At': item.created_at || ''
+        })));
+        XLSX.utils.book_append_sheet(workbook, gallerySheet, 'Gallery');
+      }
 
       // Add Products sheet
-      const productsSheet = XLSX.utils.json_to_sheet(products);
-      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products');
+      if (products && products.length > 0) {
+        const productsSheet = XLSX.utils.json_to_sheet(products.map(product => ({
+          ID: product.id || '',
+          Name: product.name || '',
+          Description: product.description || '',
+          Price: product.price || '',
+          'Image URL': product.image_url || '',
+          'Created At': product.created_at || ''
+        })));
+        XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products');
+      }
 
       // Add Testimonials sheet
-      const testimonialsSheet = XLSX.utils.json_to_sheet(testimonials);
-      XLSX.utils.book_append_sheet(workbook, testimonialsSheet, 'Testimonials');
+      if (testimonials && testimonials.length > 0) {
+        const testimonialsSheet = XLSX.utils.json_to_sheet(testimonials.map(testimonial => ({
+          ID: testimonial.id || '',
+          Name: testimonial.name || '',
+          Role: testimonial.role || '',
+          Content: testimonial.content || '',
+          Rating: testimonial.rating || '',
+          'Avatar URL': testimonial.avatar_url || '',
+          'Created At': testimonial.created_at || ''
+        })));
+        XLSX.utils.book_append_sheet(workbook, testimonialsSheet, 'Testimonials');
+      }
+
+      // If no data exists, create a sheet with headers
+      if (workbook.SheetNames.length === 0) {
+        const emptySheet = XLSX.utils.json_to_sheet([{
+          'Info': 'No data available for backup',
+          'Date': new Date().toISOString()
+        }]);
+        XLSX.utils.book_append_sheet(workbook, emptySheet, 'Info');
+      }
 
       // Generate filename with current date
       const date = new Date().toISOString().split('T')[0];
@@ -186,7 +244,51 @@ export function AdminSettings() {
           // Add each item to the database
           for (const item of jsonData) {
             try {
-              await add(collection, item);
+              // Convert the Excel data back to the expected format
+              let processedItem: any = {};
+              
+              if (collection === 'event_requests') {
+                processedItem = {
+                  name: item['Name'] || '',
+                  email: item['Email'] || '',
+                  phone: item['Phone'] || '',
+                  eventType: item['Event Type'] || '',
+                  date: item['Date'] || '',
+                  guestCount: item['Guest Count'] || '',
+                  requirements: item['Requirements'] || '',
+                  status: item['Status'] || 'pending'
+                };
+              } else if (collection === 'contact_messages') {
+                processedItem = {
+                  name: item['Name'] || '',
+                  email: item['Email'] || '',
+                  message: item['Message'] || ''
+                };
+              } else if (collection === 'gallery') {
+                processedItem = {
+                  title: item['Title'] || '',
+                  image_url: item['Image URL'] || '',
+                  category: item['Category'] || '',
+                  description: item['Description'] || ''
+                };
+              } else if (collection === 'products') {
+                processedItem = {
+                  name: item['Name'] || '',
+                  description: item['Description'] || '',
+                  price: item['Price'] || '',
+                  image_url: item['Image URL'] || ''
+                };
+              } else if (collection === 'testimonials') {
+                processedItem = {
+                  name: item['Name'] || '',
+                  role: item['Role'] || '',
+                  content: item['Content'] || '',
+                  rating: parseInt(item['Rating']) || 5,
+                  avatar_url: item['Avatar URL'] || ''
+                };
+              }
+              
+              await add(collection, processedItem);
             } catch (error) {
               console.warn(`Failed to restore item in ${collection}:`, error);
             }
