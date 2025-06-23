@@ -59,6 +59,16 @@ export function GalleryAndProducts() {
     );
   };
 
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setCurrentImageIndex(0); // Reset to first image when category changes
+  };
+
+  const handleImageClick = (index: number) => {
+    setCurrentImageIndex(index);
+    setShowLightbox(true);
+  };
+
   return (
     <section id="gallery" className="py-20 bg-gradient-to-b from-gray-900 to-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,7 +130,7 @@ export function GalleryAndProducts() {
               {categories.map((category) => (
                 <button
                   key={category}
-                  onClick={() => setSelectedCategory(category)}
+                  onClick={() => handleCategoryChange(category)}
                   className={`px-6 py-2 rounded-full font-medium transition-all duration-200 ${
                     selectedCategory === category
                       ? 'bg-orange-500 text-white'
@@ -133,30 +143,38 @@ export function GalleryAndProducts() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredImages.map((image, index) => (
-              <div
-                key={image.id}
-                onClick={() => {
-                  setCurrentImageIndex(index);
-                  setShowLightbox(true);
-                }}
-                className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
-              >
-                <img
-                  src={image.image_url}
-                  alt={image.title}
-                  className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <h3 className="text-xl font-semibold text-white">{image.title}</h3>
-                    <p className="text-orange-500">{image.category}</p>
+          {filteredImages.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredImages.map((image, index) => (
+                <div
+                  key={image.id}
+                  onClick={() => handleImageClick(index)}
+                  className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
+                >
+                  <img
+                    src={image.image_url}
+                    alt={image.title}
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="absolute bottom-0 left-0 right-0 p-6">
+                      <h3 className="text-xl font-semibold text-white">{image.title}</h3>
+                      <p className="text-orange-500">{image.category}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-lg">
+                {selectedCategory === 'All' 
+                  ? 'No gallery items available yet.' 
+                  : `No ${selectedCategory} events in gallery yet.`
+                }
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Lightbox */}
@@ -168,23 +186,37 @@ export function GalleryAndProducts() {
             >
               ✕
             </button>
-            <button
-              onClick={handlePrevImage}
-              className="absolute left-4 text-white p-2 hover:text-orange-500"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <button
-              onClick={handleNextImage}
-              className="absolute right-4 text-white p-2 hover:text-orange-500"
-            >
-              <ArrowRight className="w-6 h-6" />
-            </button>
-            <img
-              src={filteredImages[currentImageIndex].image_url}
-              alt={filteredImages[currentImageIndex].title}
-              className="max-h-[90vh] max-w-[90vw] object-contain"
-            />
+            {filteredImages.length > 1 && (
+              <>
+                <button
+                  onClick={handlePrevImage}
+                  className="absolute left-4 text-white p-2 hover:text-orange-500"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={handleNextImage}
+                  className="absolute right-4 text-white p-2 hover:text-orange-500"
+                >
+                  <ArrowRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+            <div className="text-center">
+              <img
+                src={filteredImages[currentImageIndex].image_url}
+                alt={filteredImages[currentImageIndex].title}
+                className="max-h-[80vh] max-w-[90vw] object-contain"
+              />
+              <div className="mt-4">
+                <h3 className="text-xl font-semibold text-white">
+                  {filteredImages[currentImageIndex].title}
+                </h3>
+                <p className="text-orange-500">
+                  {filteredImages[currentImageIndex].category}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
