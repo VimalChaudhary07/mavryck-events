@@ -93,6 +93,27 @@ export function Contact() {
               </div>
             </motion.div>
 
+              {/* Location Block */}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      className="flex items-start gap-4"
+    >
+      <div className="bg-orange-500/10 p-3 rounded-lg">
+        <MapPin className="w-6 h-6 text-orange-500" />
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-1">Location</h3>
+        <p className="text-gray-400">
+          MAHALAXMI & CHINCHPOKLI, MUMBAI, MAHARASHTRA.<br />
+          PIN CODE - 400011.<br />
+          LANDMARK - MINARVA TOWER.
+        </p>
+      </div>
+    </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
