@@ -10,7 +10,7 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Calendar className="h-8 w-8 text-orange-500" />
-              <span className="text-white font-bold text-xl">Festive.Finesse.Events</span>
+              <span className="text-white font-bold text-xl">Mavryck Events</span>
             </div>
             <p className="text-gray-400 mb-4">
               Creating memorable events and unforgettable experiences.
@@ -71,8 +71,8 @@ export function Footer() {
                   <a href="mailto:mr.gupta881@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors">
                     mr.gupta881@gmail.com
                   </a>
-                  <a href="mailto:festive.finesse.events@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors">
-                    festive.finesse.events@gmail.com
+                  <a href="mailto:mavryckevents@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors">
+                   mavryckevents@gmail.com
                   </a>
                 </div>
               </li>
@@ -121,7 +121,7 @@ export function Footer() {
         <div className="border-t border-gray-800 pt-8">
           <div className="text-center text-gray-400">
             <p className="mb-2">
-              © {new Date().getFullYear()} Festive Finesse Events. All rights reserved.
+              © {new Date().getFullYear()} Mavryck Events. All rights reserved.
             </p>
             <p className="text-sm">
               Built by Tech Trio: Vimal Chaudhary, Sujal Bhul, Kailash Gupta
