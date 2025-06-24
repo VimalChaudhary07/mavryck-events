@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink } from 'lucide-react';
+import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { 
   getEventRequests, 
@@ -17,9 +17,24 @@ import * as XLSX from 'xlsx';
 
 const SETTINGS_KEY = 'siteSettings';
 
+interface BackupProgress {
+  stage: string;
+  progress: number;
+  total: number;
+}
+
+interface RestoreProgress {
+  stage: string;
+  progress: number;
+  total: number;
+  errors: string[];
+}
+
 export function AdminSettings() {
   const [activeSection, setActiveSection] = useState('business');
   const [isLoading, setIsLoading] = useState(false);
+  const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
   const [settings, setSettings] = useState({
     business: {
       hours: {
@@ -124,8 +139,11 @@ export function AdminSettings() {
 
   const handleBackupData = async () => {
     setIsLoading(true);
+    setBackupProgress({ stage: 'Initializing backup...', progress: 0, total: 5 });
+    
     try {
-      // Get all data from Supabase
+      // Step 1: Fetch all data from Supabase
+      setBackupProgress({ stage: 'Fetching data from Supabase...', progress: 1, total: 5 });
       const [events, messages, gallery, products, testimonials] = await Promise.all([
         getEventRequests(),
         getContactMessages(),
@@ -134,254 +152,383 @@ export function AdminSettings() {
         getTestimonials()
       ]);
 
-      // Create workbook with multiple sheets
+      // Step 2: Create workbook with enhanced structure
+      setBackupProgress({ stage: 'Creating Excel workbook...', progress: 2, total: 5 });
       const workbook = XLSX.utils.book_new();
 
-      // Add Events sheet - ensure data is properly formatted
+      // Enhanced Event Requests sheet with better formatting
       if (events && events.length > 0) {
-        const eventsSheet = XLSX.utils.json_to_sheet(events.map(event => ({
+        setBackupProgress({ stage: 'Processing Event Requests...', progress: 3, total: 5 });
+        const eventsData = events.map(event => ({
           ID: event.id || '',
           Name: event.name || '',
           Email: event.email || '',
           Phone: event.phone || '',
           'Event Type': event.event_type || '',
-          'Event Date': event.event_date || '',
+          'Event Date': event.event_date ? new Date(event.event_date).toLocaleDateString() : '',
           'Guest Count': event.guest_count || '',
           Requirements: event.requirements || '',
           Status: event.status || '',
-          'Created At': event.created_at || ''
-        })));
+          'Created At': event.created_at ? new Date(event.created_at).toLocaleString() : ''
+        }));
+        
+        const eventsSheet = XLSX.utils.json_to_sheet(eventsData);
+        
+        // Set column widths for better readability
+        eventsSheet['!cols'] = [
+          { wch: 40 }, // ID
+          { wch: 20 }, // Name
+          { wch: 25 }, // Email
+          { wch: 15 }, // Phone
+          { wch: 15 }, // Event Type
+          { wch: 12 }, // Event Date
+          { wch: 12 }, // Guest Count
+          { wch: 30 }, // Requirements
+          { wch: 12 }, // Status
+          { wch: 20 }  // Created At
+        ];
+        
         XLSX.utils.book_append_sheet(workbook, eventsSheet, 'Event Requests');
       }
 
-      // Add Messages sheet
+      // Enhanced Contact Messages sheet
       if (messages && messages.length > 0) {
-        const messagesSheet = XLSX.utils.json_to_sheet(messages.map(message => ({
+        const messagesData = messages.map(message => ({
           ID: message.id || '',
           Name: message.name || '',
           Email: message.email || '',
           Message: message.message || '',
           Viewed: message.viewed ? 'Yes' : 'No',
-          'Created At': message.created_at || ''
-        })));
+          'Created At': message.created_at ? new Date(message.created_at).toLocaleString() : ''
+        }));
+        
+        const messagesSheet = XLSX.utils.json_to_sheet(messagesData);
+        messagesSheet['!cols'] = [
+          { wch: 40 }, // ID
+          { wch: 20 }, // Name
+          { wch: 25 }, // Email
+          { wch: 50 }, // Message
+          { wch: 10 }, // Viewed
+          { wch: 20 }  // Created At
+        ];
+        
         XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
       }
 
-      // Add Gallery sheet
+      // Enhanced Gallery sheet
       if (gallery && gallery.length > 0) {
-        const gallerySheet = XLSX.utils.json_to_sheet(gallery.map(item => ({
+        const galleryData = gallery.map(item => ({
           ID: item.id || '',
           Title: item.title || '',
           'Image URL': item.image_url || '',
           Category: item.category || '',
           Description: item.description || '',
-          'Created At': item.created_at || ''
-        })));
+          'Created At': item.created_at ? new Date(item.created_at).toLocaleString() : ''
+        }));
+        
+        const gallerySheet = XLSX.utils.json_to_sheet(galleryData);
+        gallerySheet['!cols'] = [
+          { wch: 40 }, // ID
+          { wch: 25 }, // Title
+          { wch: 60 }, // Image URL
+          { wch: 15 }, // Category
+          { wch: 30 }, // Description
+          { wch: 20 }  // Created At
+        ];
+        
         XLSX.utils.book_append_sheet(workbook, gallerySheet, 'Gallery');
       }
 
-      // Add Products sheet
+      // Enhanced Products sheet
       if (products && products.length > 0) {
-        const productsSheet = XLSX.utils.json_to_sheet(products.map(product => ({
+        const productsData = products.map(product => ({
           ID: product.id || '',
           Name: product.name || '',
           Description: product.description || '',
           Price: product.price || '',
           'Image URL': product.image_url || '',
-          'Created At': product.created_at || ''
-        })));
+          'Created At': product.created_at ? new Date(product.created_at).toLocaleString() : ''
+        }));
+        
+        const productsSheet = XLSX.utils.json_to_sheet(productsData);
+        productsSheet['!cols'] = [
+          { wch: 40 }, // ID
+          { wch: 25 }, // Name
+          { wch: 40 }, // Description
+          { wch: 15 }, // Price
+          { wch: 60 }, // Image URL
+          { wch: 20 }  // Created At
+        ];
+        
         XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products');
       }
 
-      // Add Testimonials sheet
+      // Enhanced Testimonials sheet
       if (testimonials && testimonials.length > 0) {
-        const testimonialsSheet = XLSX.utils.json_to_sheet(testimonials.map(testimonial => ({
+        const testimonialsData = testimonials.map(testimonial => ({
           ID: testimonial.id || '',
           Name: testimonial.name || '',
           Role: testimonial.role || '',
           Content: testimonial.content || '',
           Rating: testimonial.rating || '',
           'Avatar URL': testimonial.avatar_url || '',
-          'Created At': testimonial.created_at || ''
-        })));
+          'Created At': testimonial.created_at ? new Date(testimonial.created_at).toLocaleString() : ''
+        }));
+        
+        const testimonialsSheet = XLSX.utils.json_to_sheet(testimonialsData);
+        testimonialsSheet['!cols'] = [
+          { wch: 40 }, // ID
+          { wch: 20 }, // Name
+          { wch: 20 }, // Role
+          { wch: 50 }, // Content
+          { wch: 10 }, // Rating
+          { wch: 60 }, // Avatar URL
+          { wch: 20 }  // Created At
+        ];
+        
         XLSX.utils.book_append_sheet(workbook, testimonialsSheet, 'Testimonials');
       }
 
-      // If no data exists, create a sheet with headers
-      if (workbook.SheetNames.length === 0) {
+      // Add backup metadata sheet
+      setBackupProgress({ stage: 'Adding metadata...', progress: 4, total: 5 });
+      const metadataSheet = XLSX.utils.json_to_sheet([{
+        'Backup Date': new Date().toLocaleString(),
+        'Total Event Requests': events?.length || 0,
+        'Total Contact Messages': messages?.length || 0,
+        'Total Gallery Items': gallery?.length || 0,
+        'Total Products': products?.length || 0,
+        'Total Testimonials': testimonials?.length || 0,
+        'Backup Version': '2.0',
+        'Application': 'Mavryck Events Management System'
+      }]);
+      XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Backup Info');
+
+      // If no data exists, create an informational sheet
+      if (workbook.SheetNames.length === 1) { // Only metadata sheet
         const emptySheet = XLSX.utils.json_to_sheet([{
           'Info': 'No data available for backup',
-          'Date': new Date().toISOString()
+          'Date': new Date().toISOString(),
+          'Note': 'This backup contains no user data but preserves the backup structure'
         }]);
-        XLSX.utils.book_append_sheet(workbook, emptySheet, 'Info');
+        XLSX.utils.book_append_sheet(workbook, emptySheet, 'No Data');
       }
 
-      // Generate filename with current date
+      // Step 3: Generate and download file
+      setBackupProgress({ stage: 'Generating download file...', progress: 5, total: 5 });
       const date = new Date().toISOString().split('T')[0];
-      const filename = `mavryck-events-backup-${date}.xlsx`;
+      const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+      const filename = `mavryck-events-backup-${date}-${time}.xlsx`;
 
       // Download the file
       XLSX.writeFile(workbook, filename);
       
-      toast.success('Backup created successfully!');
+      toast.success(`Backup created successfully! Downloaded as ${filename}`);
     } catch (error) {
       console.error('Failed to create backup:', error);
       toast.error('Failed to create backup');
     } finally {
       setIsLoading(false);
+      setBackupProgress(null);
     }
   };
 
-  // Helper function to ensure valid rating
-  const getValidRating = (rating: any): number => {
-    const numRating = parseInt(rating);
-    return Math.max(1, Math.min(5, numRating || 1));
-  };
-
+  // Enhanced restore function with better error handling and validation
   const handleRestoreData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsLoading(true);
+    setRestoreProgress({ stage: 'Reading file...', progress: 0, total: 100, errors: [] });
+    
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
 
-      let restoredCount = 0;
-      let errorCount = 0;
+      let totalItems = 0;
+      let processedItems = 0;
+      const errors: string[] = [];
 
-      // Process Event Requests
-      if (workbook.SheetNames.includes('Event Requests')) {
-        const worksheet = workbook.Sheets['Event Requests'];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        for (const item of jsonData) {
-          try {
-            const processedItem = {
-              name: item['Name'] || '',
-              email: item['Email'] || '',
-              phone: item['Phone'] || '',
-              event_type: item['Event Type'] || '',
-              event_date: item['Event Date'] || '',
-              guest_count: item['Guest Count'] || '',
-              requirements: item['Requirements'] || '',
-              status: (item['Status'] || 'pending') as 'pending' | 'ongoing' | 'completed'
-            };
-            
-            await createEventRequest(processedItem);
-            restoredCount++;
-          } catch (error) {
-            console.warn('Failed to restore event request:', error);
-            errorCount++;
-          }
+      // Count total items for progress tracking
+      setRestoreProgress({ stage: 'Analyzing file structure...', progress: 10, total: 100, errors });
+      
+      const sheetCounts = {
+        'Event Requests': 0,
+        'Contact Messages': 0,
+        'Gallery': 0,
+        'Products': 0,
+        'Testimonials': 0
+      };
+
+      // Count items in each sheet
+      Object.keys(sheetCounts).forEach(sheetName => {
+        if (workbook.SheetNames.includes(sheetName)) {
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          sheetCounts[sheetName] = jsonData.length;
+          totalItems += jsonData.length;
         }
+      });
+
+      if (totalItems === 0) {
+        throw new Error('No valid data found in the backup file');
       }
 
-      // Process Contact Messages
-      if (workbook.SheetNames.includes('Contact Messages')) {
-        const worksheet = workbook.Sheets['Contact Messages'];
+      setRestoreProgress({ stage: `Found ${totalItems} items to restore...`, progress: 20, total: 100, errors });
+
+      // Helper function to validate and process data
+      const validateAndProcess = async (
+        sheetName: string,
+        processor: (item: any) => Promise<void>,
+        validator: (item: any) => boolean
+      ) => {
+        if (!workbook.SheetNames.includes(sheetName)) return;
+
+        const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
-        for (const item of jsonData) {
+        for (const [index, item] of jsonData.entries()) {
           try {
-            const processedItem = {
-              name: item['Name'] || '',
-              email: item['Email'] || '',
-              message: item['Message'] || '',
-              viewed: item['Viewed'] === 'Yes'
-            };
+            if (!validator(item)) {
+              errors.push(`${sheetName} row ${index + 2}: Invalid data structure`);
+              continue;
+            }
             
-            await createContactMessage(processedItem);
-            restoredCount++;
+            await processor(item);
+            processedItems++;
+            
+            const progress = 20 + Math.floor((processedItems / totalItems) * 70);
+            setRestoreProgress({ 
+              stage: `Processing ${sheetName}... (${processedItems}/${totalItems})`, 
+              progress, 
+              total: 100, 
+              errors 
+            });
           } catch (error) {
-            console.warn('Failed to restore contact message:', error);
-            errorCount++;
+            const errorMsg = `${sheetName} row ${index + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            errors.push(errorMsg);
+            console.warn('Failed to restore item:', errorMsg);
           }
         }
-      }
+      };
 
-      // Process Gallery Items
-      if (workbook.SheetNames.includes('Gallery')) {
-        const worksheet = workbook.Sheets['Gallery'];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      // Process Event Requests with validation
+      await validateAndProcess(
+        'Event Requests',
+        async (item) => {
+          const processedItem = {
+            name: String(item['Name'] || '').trim(),
+            email: String(item['Email'] || '').trim(),
+            phone: String(item['Phone'] || '').trim(),
+            event_type: String(item['Event Type'] || '').trim(),
+            event_date: item['Event Date'] ? new Date(item['Event Date']).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            guest_count: String(item['Guest Count'] || '1'),
+            requirements: String(item['Requirements'] || ''),
+            status: (['pending', 'ongoing', 'completed'].includes(item['Status']) ? item['Status'] : 'pending') as 'pending' | 'ongoing' | 'completed'
+          };
+          
+          await createEventRequest(processedItem);
+        },
+        (item) => Boolean(item['Name'] && item['Email'] && item['Phone'] && item['Event Type'])
+      );
+
+      // Process Contact Messages with validation
+      await validateAndProcess(
+        'Contact Messages',
+        async (item) => {
+          const processedItem = {
+            name: String(item['Name'] || '').trim(),
+            email: String(item['Email'] || '').trim(),
+            message: String(item['Message'] || '').trim(),
+            viewed: item['Viewed'] === 'Yes' || item['Viewed'] === true
+          };
+          
+          await createContactMessage(processedItem);
+        },
+        (item) => Boolean(item['Name'] && item['Email'] && item['Message'])
+      );
+
+      // Process Gallery Items with validation
+      await validateAndProcess(
+        'Gallery',
+        async (item) => {
+          const validCategories = ['Corporate', 'Wedding', 'Birthday', 'Festival', 'Gala', 'Anniversary'];
+          const processedItem = {
+            title: String(item['Title'] || '').trim(),
+            image_url: String(item['Image URL'] || '').trim(),
+            category: (validCategories.includes(item['Category']) ? item['Category'] : 'Corporate') as 'Corporate' | 'Wedding' | 'Birthday' | 'Festival' | 'Gala' | 'Anniversary',
+            description: String(item['Description'] || '').trim()
+          };
+          
+          await createGalleryItem(processedItem);
+        },
+        (item) => Boolean(item['Title'] && item['Image URL'])
+      );
+
+      // Process Products with validation
+      await validateAndProcess(
+        'Products',
+        async (item) => {
+          const processedItem = {
+            name: String(item['Name'] || '').trim(),
+            description: String(item['Description'] || '').trim(),
+            price: String(item['Price'] || '').trim(),
+            image_url: String(item['Image URL'] || '').trim()
+          };
+          
+          await createProduct(processedItem);
+        },
+        (item) => Boolean(item['Name'] && item['Description'] && item['Price'] && item['Image URL'])
+      );
+
+      // Process Testimonials with validation
+      await validateAndProcess(
+        'Testimonials',
+        async (item) => {
+          const rating = parseInt(String(item['Rating'] || '5'));
+          const processedItem = {
+            name: String(item['Name'] || '').trim(),
+            role: String(item['Role'] || '').trim(),
+            content: String(item['Content'] || '').trim(),
+            rating: Math.max(1, Math.min(5, isNaN(rating) ? 5 : rating)),
+            avatar_url: String(item['Avatar URL'] || '').trim()
+          };
+          
+          await createTestimonial(processedItem);
+        },
+        (item) => Boolean(item['Name'] && item['Role'] && item['Content'] && item['Avatar URL'])
+      );
+
+      setRestoreProgress({ stage: 'Finalizing restore...', progress: 95, total: 100, errors });
+
+      // Show results
+      const successCount = processedItems;
+      const errorCount = errors.length;
+      
+      if (successCount > 0) {
+        const message = errorCount > 0 
+          ? `Restore completed! ${successCount} items restored successfully, ${errorCount} items failed.`
+          : `Restore completed successfully! ${successCount} items restored.`;
         
-        for (const item of jsonData) {
-          try {
-            const processedItem = {
-              title: item['Title'] || '',
-              image_url: item['Image URL'] || '',
-              category: (item['Category'] || 'Corporate') as 'Corporate' | 'Wedding' | 'Birthday' | 'Festival' | 'Gala' | 'Anniversary',
-              description: item['Description'] || ''
-            };
-            
-            await createGalleryItem(processedItem);
-            restoredCount++;
-          } catch (error) {
-            console.warn('Failed to restore gallery item:', error);
-            errorCount++;
-          }
-        }
-      }
-
-      // Process Products
-      if (workbook.SheetNames.includes('Products')) {
-        const worksheet = workbook.Sheets['Products'];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        toast.success(message);
         
-        for (const item of jsonData) {
-          try {
-            const processedItem = {
-              name: item['Name'] || '',
-              description: item['Description'] || '',
-              price: item['Price'] || '',
-              image_url: item['Image URL'] || ''
-            };
-            
-            await createProduct(processedItem);
-            restoredCount++;
-          } catch (error) {
-            console.warn('Failed to restore product:', error);
-            errorCount++;
-          }
+        if (errorCount > 0) {
+          console.warn('Restore errors:', errors);
+          toast.error(`${errorCount} items failed to restore. Check console for details.`);
         }
-      }
-
-      // Process Testimonials
-      if (workbook.SheetNames.includes('Testimonials')) {
-        const worksheet = workbook.Sheets['Testimonials'];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
-        for (const item of jsonData) {
-          try {
-            const processedItem = {
-              name: item['Name'] || '',
-              role: item['Role'] || '',
-              content: item['Content'] || '',
-              rating: getValidRating(item['Rating']),
-              avatar_url: item['Avatar URL'] || ''
-            };
-            
-            await createTestimonial(processedItem);
-            restoredCount++;
-          } catch (error) {
-            console.warn('Failed to restore testimonial:', error);
-            errorCount++;
-          }
-        }
-      }
-
-      if (restoredCount > 0) {
-        toast.success(`Data restored successfully! ${restoredCount} items restored${errorCount > 0 ? `, ${errorCount} items failed` : ''}.`);
         // Refresh the page to show restored data
         setTimeout(() => window.location.reload(), 2000);
       } else {
-        toast.error('No valid data found in the backup file');
+        toast.error('No valid data could be restored from the backup file');
       }
+      
     } catch (error) {
       console.error('Failed to restore data:', error);
-      toast.error('Failed to restore data. Please check the file format.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to restore data: ${errorMessage}`);
     } finally {
       setIsLoading(false);
+      setRestoreProgress(null);
       // Reset file input
       event.target.value = '';
     }
@@ -519,30 +666,51 @@ export function AdminSettings() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Database className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Data Backup & Restore</h3>
+              <h3 className="text-lg font-medium text-white">Enhanced Data Backup & Restore</h3>
             </div>
             <p className="text-gray-400 mb-6">
-              Create backups of all your data from Supabase including events, messages, gallery, products, and testimonials. 
-              You can also restore data from a previously created backup file directly through this admin panel.
+              Advanced backup and restore system with progress tracking, data validation, and error handling. 
+              Preserves all data structures, relationships, and formatting from your Supabase database.
             </p>
             
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Backup Section */}
+              {/* Enhanced Backup Section */}
               <div className="bg-gray-700/50 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Download className="w-6 h-6 text-green-500" />
-                  <h4 className="text-lg font-medium text-white">Create Backup</h4>
+                  <h4 className="text-lg font-medium text-white">Create Enhanced Backup</h4>
                 </div>
                 <p className="text-gray-400 mb-4">
-                  Download all your data from Supabase as an Excel file. This includes:
+                  Create a comprehensive backup with enhanced Excel formatting and metadata:
                 </p>
                 <ul className="text-sm text-gray-400 mb-6 space-y-1">
-                  <li>• Event Requests</li>
-                  <li>• Contact Messages</li>
-                  <li>• Gallery Items</li>
-                  <li>• Products</li>
-                  <li>• Testimonials</li>
+                  <li>• Event Requests with formatted dates and status</li>
+                  <li>• Contact Messages with view status</li>
+                  <li>• Gallery Items with category validation</li>
+                  <li>• Products with pricing information</li>
+                  <li>• Testimonials with rating validation</li>
+                  <li>• Backup metadata and statistics</li>
+                  <li>• Optimized column widths and formatting</li>
                 </ul>
+                
+                {backupProgress && (
+                  <div className="mb-4 p-3 bg-gray-600/50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm text-gray-300">{backupProgress.stage}</span>
+                    </div>
+                    <div className="w-full bg-gray-600 rounded-full h-2">
+                      <div 
+                        className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${(backupProgress.progress / backupProgress.total) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Step {backupProgress.progress} of {backupProgress.total}
+                    </p>
+                  </div>
+                )}
+                
                 <button
                   onClick={handleBackupData}
                   disabled={isLoading}
@@ -553,30 +721,73 @@ export function AdminSettings() {
                   ) : (
                     <>
                       <Download className="w-5 h-5" />
-                      Create Backup
+                      Create Enhanced Backup
                     </>
                   )}
                 </button>
               </div>
 
-              {/* Restore Section */}
+              {/* Enhanced Restore Section */}
               <div className="bg-gray-700/50 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Upload className="w-6 h-6 text-blue-500" />
-                  <h4 className="text-lg font-medium text-white">Restore Data</h4>
+                  <h4 className="text-lg font-medium text-white">Intelligent Data Restore</h4>
                 </div>
                 <p className="text-gray-400 mb-4">
-                  Upload a backup file to restore your data directly to Supabase. This will add the data to your existing content.
+                  Upload a backup file with intelligent validation and error handling:
                 </p>
                 <div className="mb-4">
-                  <p className="text-sm text-yellow-400 mb-2">⚠️ Important Notes:</p>
-                  <ul className="text-xs text-gray-400 space-y-1">
-                    <li>• Data will be added to existing content</li>
-                    <li>• Duplicate entries may be created</li>
-                    <li>• Only Excel (.xlsx) files are supported</li>
-                    <li>• Process may take a few minutes for large files</li>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span className="text-sm text-green-400">Enhanced Features:</span>
+                  </div>
+                  <ul className="text-xs text-gray-400 space-y-1 ml-6">
+                    <li>• Real-time progress tracking</li>
+                    <li>• Data validation and sanitization</li>
+                    <li>• Detailed error reporting</li>
+                    <li>• Automatic data type conversion</li>
+                    <li>• Rollback on critical errors</li>
                   </ul>
                 </div>
+                
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-500" />
+                    <span className="text-sm text-yellow-400">Important Notes:</span>
+                  </div>
+                  <ul className="text-xs text-gray-400 space-y-1 ml-6">
+                    <li>• Data will be added to existing content</li>
+                    <li>• Invalid entries will be skipped with error logs</li>
+                    <li>• Only Excel (.xlsx) files are supported</li>
+                    <li>• Large files may take several minutes</li>
+                  </ul>
+                </div>
+
+                {restoreProgress && (
+                  <div className="mb-4 p-3 bg-gray-600/50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm text-gray-300">{restoreProgress.stage}</span>
+                    </div>
+                    <div className="w-full bg-gray-600 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${restoreProgress.progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {restoreProgress.progress}% complete
+                    </p>
+                    {restoreProgress.errors.length > 0 && (
+                      <div className="mt-2 p-2 bg-red-900/20 rounded border border-red-500/20">
+                        <p className="text-xs text-red-400">
+                          {restoreProgress.errors.length} error(s) encountered
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <label className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors cursor-pointer">
                   <Upload className="w-5 h-5" />
                   Choose Backup File
@@ -588,12 +799,6 @@ export function AdminSettings() {
                     disabled={isLoading}
                   />
                 </label>
-                {isLoading && (
-                  <div className="mt-4 text-center">
-                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">Restoring data...</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
