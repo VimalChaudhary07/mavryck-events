@@ -1,31 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { Star, Quote } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getAll } from '../lib/db';
-
-interface Testimonial {
-  id: string;
-  name: string;
-  role: string;
-  content: string;
-  rating: number;
-  avatar_url: string;
-}
+import { getTestimonials } from '../lib/database';
+import type { Testimonial } from '../types/supabase';
 
 export function Testimonials() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadTestimonials = async () => {
       try {
-        const data = await getAll<Testimonial>('testimonials');
+        setLoading(true);
+        const data = await getTestimonials();
         setTestimonials(data || []);
       } catch (error) {
         console.error('Failed to load testimonials:', error);
+      } finally {
+        setLoading(false);
       }
     };
     loadTestimonials();
   }, []);
+
+  if (loading) {
+    return (
+      <section className="py-20 bg-gradient-to-b from-black to-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Loading testimonials...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (testimonials.length === 0) return null;
 

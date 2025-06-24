@@ -1,18 +1,10 @@
 import React from 'react';
 import { X, Mail, User, MessageSquare, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-interface Message {
-  id: string;
-  name: string;
-  email: string;
-  message: string;
-  created_at?: string;
-  viewed?: boolean;
-}
+import type { ContactMessage } from '../types/supabase';
 
 interface MessageDetailsModalProps {
-  message: Message | null;
+  message: ContactMessage | null;
   isOpen: boolean;
   onClose: () => void;
   onMarkAsViewed: (messageId: string) => void;

@@ -4,17 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"node src/server/index.js\"",
-    "build": "tsc && vite build",
+    "dev": "vite",
+    "build": "tsc && vite buil",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
-    "concurrently": "^8.2.2",
-    "express": "^4.18.3",
+    "@supabase/supabase-js": "^2.39.3",
     "framer-motion": "^11.0.8",
-    "idb": "^8.0.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -23,8 +20,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.9",
-    "@types/express": "^4.17.21",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.2.1",

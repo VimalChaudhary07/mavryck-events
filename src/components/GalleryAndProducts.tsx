@@ -1,22 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Star, ArrowRight, ArrowLeft, ExternalLink } from 'lucide-react';
-import { getAll } from '../lib/db';
-
-interface Product {
-  id: string;
-  name: string;
-  price: string;
-  description: string;
-  image_url: string;
-}
-
-interface GalleryItem {
-  id: string;
-  title: string;
-  image_url: string;
-  category: string;
-  description?: string;
-}
+import { getGalleryItems, getProducts } from '../lib/database';
+import type { GalleryItem, Product } from '../types/supabase';
 
 const categories = ['All', 'Corporate', 'Wedding', 'Birthday', 'Festival', 'Gala', 'Anniversary'];
 
@@ -27,18 +12,22 @@ export function GalleryAndProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
   const [googlePhotosUrl, setGooglePhotosUrl] = useState('https://photos.google.com/share/your-album-link');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
         const [galleryData, productsData] = await Promise.all([
-          getAll<GalleryItem>('gallery'),
-          getAll<Product>('products')
+          getGalleryItems(),
+          getProducts()
         ]);
         setGalleryImages(galleryData || []);
         setProducts(productsData || []);
       } catch (error) {
         console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
       }
     };
     loadData();
@@ -86,6 +75,19 @@ export function GalleryAndProducts() {
   const handleViewMoreClick = () => {
     window.open(googlePhotosUrl, '_blank', 'noopener,noreferrer');
   };
+
+  if (loading) {
+    return (
+      <section id="gallery" className="py-20 bg-gradient-to-b from-gray-900 to-black">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Loading gallery and products...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="gallery" className="py-20 bg-gradient-to-b from-gray-900 to-black">
