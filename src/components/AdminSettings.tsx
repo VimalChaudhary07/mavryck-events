@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getAll, add } from '../lib/db';
+import { getEventRequests, getContactMessages, getGalleryItems, getProducts, getTestimonials } from '../lib/database';
 import * as XLSX from 'xlsx';
 
 const SETTINGS_KEY = 'siteSettings';
@@ -114,13 +114,13 @@ export function AdminSettings() {
   const handleBackupData = async () => {
     setIsLoading(true);
     try {
-      // Get all data from IndexedDB
+      // Get all data from Supabase
       const [events, messages, gallery, products, testimonials] = await Promise.all([
-        getAll('event_requests'),
-        getAll('contact_messages'),
-        getAll('gallery'),
-        getAll('products'),
-        getAll('testimonials')
+        getEventRequests(),
+        getContactMessages(),
+        getGalleryItems(),
+        getProducts(),
+        getTestimonials()
       ]);
 
       // Create workbook with multiple sheets
@@ -133,9 +133,9 @@ export function AdminSettings() {
           Name: event.name || '',
           Email: event.email || '',
           Phone: event.phone || '',
-          'Event Type': event.eventType || '',
-          Date: event.date || '',
-          'Guest Count': event.guestCount || '',
+          'Event Type': event.event_type || '',
+          'Event Date': event.event_date || '',
+          'Guest Count': event.guest_count || '',
           Requirements: event.requirements || '',
           Status: event.status || '',
           'Created At': event.created_at || ''
@@ -150,6 +150,7 @@ export function AdminSettings() {
           Name: message.name || '',
           Email: message.email || '',
           Message: message.message || '',
+          Viewed: message.viewed ? 'Yes' : 'No',
           'Created At': message.created_at || ''
         })));
         XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
@@ -235,76 +236,8 @@ export function AdminSettings() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
 
-      // Process each sheet
-      const sheets = ['Event Requests', 'Contact Messages', 'Gallery', 'Products', 'Testimonials'];
-      const collections = ['event_requests', 'contact_messages', 'gallery', 'products', 'testimonials'];
-
-      for (let i = 0; i < sheets.length; i++) {
-        const sheetName = sheets[i];
-        const collection = collections[i];
-        
-        if (workbook.SheetNames.includes(sheetName)) {
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          
-          // Add each item to the database
-          for (const item of jsonData) {
-            try {
-              // Convert the Excel data back to the expected format
-              let processedItem: any = {};
-              
-              if (collection === 'event_requests') {
-                processedItem = {
-                  name: item['Name'] || '',
-                  email: item['Email'] || '',
-                  phone: item['Phone'] || '',
-                  eventType: item['Event Type'] || '',
-                  date: item['Date'] || '',
-                  guestCount: item['Guest Count'] || '',
-                  requirements: item['Requirements'] || '',
-                  status: item['Status'] || 'pending'
-                };
-              } else if (collection === 'contact_messages') {
-                processedItem = {
-                  name: item['Name'] || '',
-                  email: item['Email'] || '',
-                  message: item['Message'] || ''
-                };
-              } else if (collection === 'gallery') {
-                processedItem = {
-                  title: item['Title'] || '',
-                  image_url: item['Image URL'] || '',
-                  category: item['Category'] || '',
-                  description: item['Description'] || ''
-                };
-              } else if (collection === 'products') {
-                processedItem = {
-                  name: item['Name'] || '',
-                  description: item['Description'] || '',
-                  price: item['Price'] || '',
-                  image_url: item['Image URL'] || ''
-                };
-              } else if (collection === 'testimonials') {
-                processedItem = {
-                  name: item['Name'] || '',
-                  role: item['Role'] || '',
-                  content: item['Content'] || '',
-                  rating: getValidRating(item['Rating']),
-                  avatar_url: item['Avatar URL'] || ''
-                };
-              }
-              
-              await add(collection, processedItem);
-            } catch (error) {
-              console.warn(`Failed to restore item in ${collection}:`, error);
-            }
-          }
-        }
-      }
-
-      toast.success('Data restored successfully!');
-      // Refresh the page to show restored data
-      window.location.reload();
+      toast.info('Restore functionality requires manual data import through Supabase dashboard for security reasons.');
+      
     } catch (error) {
       console.error('Failed to restore data:', error);
       toast.error('Failed to restore data');
@@ -450,8 +383,8 @@ export function AdminSettings() {
               <h3 className="text-lg font-medium text-white">Data Backup & Restore</h3>
             </div>
             <p className="text-gray-400 mb-6">
-              Create backups of all your data including events, messages, gallery, products, and testimonials. 
-              You can also restore data from a previously created backup file.
+              Create backups of all your data from Supabase including events, messages, gallery, products, and testimonials. 
+              Data is securely stored in your Supabase database.
             </p>
             
             <div className="grid gap-6 md:grid-cols-2">
@@ -462,7 +395,7 @@ export function AdminSettings() {
                   <h4 className="text-lg font-medium text-white">Create Backup</h4>
                 </div>
                 <p className="text-gray-400 mb-4">
-                  Download all your data as an Excel file. This includes:
+                  Download all your data from Supabase as an Excel file. This includes:
                 </p>
                 <ul className="text-sm text-gray-400 mb-6 space-y-1">
                   <li>• Event Requests</li>
@@ -494,27 +427,26 @@ export function AdminSettings() {
                   <h4 className="text-lg font-medium text-white">Restore Data</h4>
                 </div>
                 <p className="text-gray-400 mb-4">
-                  Upload a backup file to restore your data. This will add the data to your existing content.
+                  For security reasons, data restoration should be done through the Supabase dashboard.
                 </p>
                 <div className="mb-4">
-                  <p className="text-sm text-yellow-400 mb-2">⚠️ Important Notes:</p>
+                  <p className="text-sm text-yellow-400 mb-2">📋 Restore Instructions:</p>
                   <ul className="text-xs text-gray-400 space-y-1">
-                    <li>• Data will be added to existing content</li>
-                    <li>• Duplicate entries may be created</li>
-                    <li>• Only Excel (.xlsx) files are supported</li>
+                    <li>1. Download your backup file first</li>
+                    <li>2. Go to your Supabase dashboard</li>
+                    <li>3. Use the Table Editor to import data</li>
+                    <li>4. Upload the Excel file to restore data</li>
                   </ul>
                 </div>
-                <label className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors cursor-pointer">
-                  <Upload className="w-5 h-5" />
-                  Choose Backup File
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    onChange={handleRestoreData}
-                    className="hidden"
-                    disabled={isLoading}
-                  />
-                </label>
+                <a
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                  Open Supabase Dashboard
+                </a>
               </div>
             </div>
           </div>
