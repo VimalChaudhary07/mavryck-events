@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { update } from '../lib/db';
+import { updateGalleryItem, updateProduct, updateTestimonial } from '../lib/database';
 import toast from 'react-hot-toast';
 
 interface EditItemModalProps {
@@ -24,15 +24,14 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const collection = type === 'gallery' ? 'gallery' : type === 'product' ? 'products' : 'testimonials';
-      
-      // Process form data based on type
-      let processedData = { ...formData };
-      if (type === 'testimonial' && typeof formData.rating === 'string') {
-        processedData.rating = parseInt(formData.rating as string);
+      if (type === 'gallery') {
+        await updateGalleryItem(item.id, formData);
+      } else if (type === 'product') {
+        await updateProduct(item.id, formData);
+      } else if (type === 'testimonial') {
+        await updateTestimonial(item.id, formData);
       }
       
-      await update(collection, item.id, processedData);
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} updated successfully`);
       onSuccess();
       onClose();
@@ -44,7 +43,10 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
+    setFormData(prev => ({ 
+      ...prev, 
+      [id]: id === 'rating' ? parseInt(value) : value 
+    }));
   };
 
   if (!isOpen || !item) return null;

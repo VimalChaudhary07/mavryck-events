@@ -2,66 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { getAll, remove, update } from '../lib/db';
+import { 
+  getEventRequests, 
+  getContactMessages, 
+  getGalleryItems, 
+  getProducts, 
+  getTestimonials,
+  deleteEventRequest,
+  deleteContactMessage,
+  deleteGalleryItem,
+  deleteProduct,
+  deleteTestimonial,
+  updateEventRequest,
+  updateContactMessage
+} from '../lib/database';
+import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
 import { AddItemModal } from './AddItemModal';
 import { EditItemModal } from './EditItemModal';
 import { EventDetailsModal } from './EventDetailsModal';
 import { MessageDetailsModal } from './MessageDetailsModal';
 import { AdminSettings } from './AdminSettings';
 
-interface Event {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  eventType: string;
-  date: string;
-  guestCount: string;
-  requirements: string;
-  status: 'pending' | 'ongoing' | 'completed';
-  created_at?: string;
-}
-
-interface Message {
-  id: string;
-  name: string;
-  email: string;
-  message: string;
-  created_at?: string;
-  viewed?: boolean;
-}
-
-interface GalleryItem {
-  id: string;
-  title: string;
-  image_url: string;
-  category: string;
-  description?: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: string;
-  image_url: string;
-}
-
-interface Testimonial {
-  id: string;
-  name: string;
-  role: string;
-  content: string;
-  rating: number;
-  avatar_url: string;
-}
-
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('events');
   const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'pending' | 'ongoing' | 'completed'>('all');
   const [messageFilter, setMessageFilter] = useState<'all' | 'new' | 'viewed'>('all');
-  const [events, setEvents] = useState<Event[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [events, setEvents] = useState<EventRequest[]>([]);
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -72,8 +39,9 @@ export function AdminDashboard() {
   const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editModalType, setEditModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventRequest | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -81,12 +49,13 @@ export function AdminDashboard() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const [eventsData, messagesData, galleryData, productsData, testimonialsData] = await Promise.all([
-        getAll<Event>('event_requests'),
-        getAll<Message>('contact_messages'),
-        getAll<GalleryItem>('gallery'),
-        getAll<Product>('products'),
-        getAll<Testimonial>('testimonials')
+        getEventRequests(),
+        getContactMessages(),
+        getGalleryItems(),
+        getProducts(),
+        getTestimonials()
       ]);
       setEvents(eventsData || []);
       setMessages(messagesData || []);
@@ -96,12 +65,14 @@ export function AdminDashboard() {
     } catch (error) {
       console.error('Failed to load data:', error);
       toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDeleteEvent = async (eventId: string) => {
     try {
-      await remove('event_requests', eventId);
+      await deleteEventRequest(eventId);
       toast.success('Event deleted successfully');
       loadData();
     } catch (error) {
@@ -112,7 +83,7 @@ export function AdminDashboard() {
 
   const handleDeleteMessage = async (messageId: string) => {
     try {
-      await remove('contact_messages', messageId);
+      await deleteContactMessage(messageId);
       toast.success('Message deleted successfully');
       loadData();
     } catch (error) {
@@ -123,7 +94,7 @@ export function AdminDashboard() {
 
   const handleDeleteGalleryItem = async (itemId: string) => {
     try {
-      await remove('gallery', itemId);
+      await deleteGalleryItem(itemId);
       toast.success('Gallery item deleted successfully');
       loadData();
     } catch (error) {
@@ -134,7 +105,7 @@ export function AdminDashboard() {
 
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await remove('products', productId);
+      await deleteProduct(productId);
       toast.success('Product deleted successfully');
       loadData();
     } catch (error) {
@@ -145,7 +116,7 @@ export function AdminDashboard() {
 
   const handleDeleteTestimonial = async (testimonialId: string) => {
     try {
-      await remove('testimonials', testimonialId);
+      await deleteTestimonial(testimonialId);
       toast.success('Testimonial deleted successfully');
       loadData();
     } catch (error) {
@@ -158,7 +129,7 @@ export function AdminDashboard() {
     try {
       const event = events.find(e => e.id === eventId);
       if (event) {
-        await update('event_requests', eventId, { ...event, status: newStatus });
+        await updateEventRequest(eventId, { status: newStatus });
         toast.success('Event status updated successfully');
         loadData();
         setSelectedEvent(prev => prev ? { ...prev, status: newStatus } : null);
@@ -173,7 +144,7 @@ export function AdminDashboard() {
     try {
       const message = messages.find(m => m.id === messageId);
       if (message) {
-        await update('contact_messages', messageId, { ...message, viewed: true });
+        await updateContactMessage(messageId, { viewed: true });
         toast.success('Message marked as viewed');
         loadData();
         setSelectedMessage(prev => prev ? { ...prev, viewed: true } : null);
@@ -195,12 +166,12 @@ export function AdminDashboard() {
     setIsEditModalOpen(true);
   };
 
-  const handleEventClick = (event: Event) => {
+  const handleEventClick = (event: EventRequest) => {
     setSelectedEvent(event);
     setIsEventDetailsOpen(true);
   };
 
-  const handleMessageClick = (message: Message) => {
+  const handleMessageClick = (message: ContactMessage) => {
     setSelectedMessage(message);
     setIsMessageDetailsOpen(true);
   };
@@ -252,6 +223,17 @@ export function AdminDashboard() {
       default: return status;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -431,7 +413,7 @@ export function AdminDashboard() {
                             </div>
                             <div>
                               <span className="text-gray-400">Event: </span>
-                              <span className="text-orange-500 capitalize">{event.eventType}</span>
+                              <span className="text-orange-500 capitalize">{event.event_type}</span>
                             </div>
                           </div>
                         </div>

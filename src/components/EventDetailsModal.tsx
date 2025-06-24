@@ -1,22 +1,10 @@
 import React from 'react';
 import { X, Calendar, Mail, Phone, Users, FileText, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-interface Event {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  eventType: string;
-  date: string;
-  guestCount: string;
-  requirements: string;
-  status: 'pending' | 'ongoing' | 'completed';
-  created_at?: string;
-}
+import type { EventRequest } from '../types/supabase';
 
 interface EventDetailsModalProps {
-  event: Event | null;
+  event: EventRequest | null;
   isOpen: boolean;
   onClose: () => void;
   onStatusChange: (eventId: string, newStatus: 'pending' | 'ongoing' | 'completed') => void;
@@ -100,7 +88,7 @@ export function EventDetailsModal({ event, isOpen, onClose, onStatusChange }: Ev
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Guest Count</label>
-                <p className="text-white">{event.guestCount}</p>
+                <p className="text-white">{event.guest_count}</p>
               </div>
             </div>
           </div>
@@ -114,11 +102,11 @@ export function EventDetailsModal({ event, isOpen, onClose, onStatusChange }: Ev
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Event Type</label>
-                <p className="text-white capitalize">{event.eventType}</p>
+                <p className="text-white capitalize">{event.event_type}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Event Date</label>
-                <p className="text-white">{new Date(event.date).toLocaleDateString()}</p>
+                <p className="text-white">{new Date(event.event_date).toLocaleDateString()}</p>
               </div>
             </div>
             {event.requirements && (

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Calendar, Phone, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { add } from '../lib/db';
+import { createEventRequest } from '../lib/database';
 import { sendEventNotification } from '../utils/email';
 
 interface EventPlanningModalProps {
@@ -15,9 +15,9 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
     name: '',
     email: '',
     phone: '',
-    eventType: 'corporate',
-    date: '',
-    guestCount: '',
+    event_type: 'corporate',
+    event_date: '',
+    guest_count: '',
     requirements: '',
     status: 'pending' as const
   });
@@ -31,7 +31,16 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
     setIsSubmitting(true);
 
     try {
-      await add('event_requests', formData);
+      await createEventRequest({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        event_type: formData.event_type,
+        event_date: formData.event_date,
+        guest_count: formData.guest_count,
+        requirements: formData.requirements,
+        status: 'pending'
+      });
       
       await sendEventNotification({
         customerEmail: formData.email,
@@ -44,9 +53,9 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
         name: '',
         email: '',
         phone: '',
-        eventType: 'corporate',
-        date: '',
-        guestCount: '',
+        event_type: 'corporate',
+        event_date: '',
+        guest_count: '',
         requirements: '',
         status: 'pending'
       });
@@ -180,12 +189,12 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="eventType" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="event_type" className="block text-sm font-medium text-gray-300 mb-2">
                   Event Type
                 </label>
                 <select
-                  id="eventType"
-                  value={formData.eventType}
+                  id="event_type"
+                  value={formData.event_type}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -205,13 +214,13 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="date" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="event_date" className="block text-sm font-medium text-gray-300 mb-2">
                   Event Date
                 </label>
                 <input
                   type="date"
-                  id="date"
-                  value={formData.date}
+                  id="event_date"
+                  value={formData.event_date}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -219,13 +228,13 @@ export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps)
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="guestCount" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="guest_count" className="block text-sm font-medium text-gray-300 mb-2">
                   Number of Guests
                 </label>
                 <input
                   type="number"
-                  id="guestCount"
-                  value={formData.guestCount}
+                  id="guest_count"
+                  value={formData.guest_count}
                   onChange={handleChange}
                   min="1"
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"

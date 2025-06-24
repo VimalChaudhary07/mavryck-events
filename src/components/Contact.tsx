@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, Instagram } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { add } from '../lib/db';
+import { createContactMessage } from '../lib/database';
 
 interface ContactFormData {
   name: string;
@@ -23,7 +23,7 @@ export function Contact() {
     setIsSubmitting(true);
 
     try {
-      await add('contact_messages', formData);
+      await createContactMessage(formData);
       toast.success('Message sent successfully!');
       setFormData({ name: '', email: '', message: '' });
     } catch (error) {
@@ -69,7 +69,7 @@ export function Contact() {
                 <a href="mailto:mr.gupta881@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
                   mr.gupta881@gmail.com
                 </a>
-                <a href="mailto:festive.finesse.events@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
+                <a href="mailto:mavryckevents@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
                   mavryckevents@gmail.com
                 </a>
               </div>
@@ -93,26 +93,26 @@ export function Contact() {
               </div>
             </motion.div>
 
-              {/* Location Block */}
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: 0.2 }}
-      className="flex items-start gap-4"
-    >
-      <div className="bg-orange-500/10 p-3 rounded-lg">
-        <MapPin className="w-6 h-6 text-orange-500" />
-      </div>
-      <div>
-        <h3 className="text-lg font-semibold text-white mb-1">Location</h3>
-        <p className="text-gray-400">
-          MAHALAXMI & CHINCHPOKLI, MUMBAI, MAHARASHTRA.<br />
-          PIN CODE - 400011.<br />
-          LANDMARK - MINARVA TOWER.
-        </p>
-      </div>
-    </motion.div>
+            {/* Location Block */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="flex items-start gap-4"
+            >
+              <div className="bg-orange-500/10 p-3 rounded-lg">
+                <MapPin className="w-6 h-6 text-orange-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-1">Location</h3>
+                <p className="text-gray-400">
+                  MAHALAXMI & CHINCHPOKLI, MUMBAI, MAHARASHTRA.<br />
+                  PIN CODE - 400011.<br />
+                  LANDMARK - MINARVA TOWER.
+                </p>
+              </div>
+            </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}

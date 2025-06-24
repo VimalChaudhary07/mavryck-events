@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { add } from '../lib/db';
+import { createGalleryItem, createProduct, createTestimonial } from '../lib/database';
 import toast from 'react-hot-toast';
 
 interface AddItemModalProps {
@@ -19,7 +19,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
           title: '',
           image_url: '',
           description: '',
-          category: 'Corporate'
+          category: 'Corporate' as const
         };
       case 'product':
         return {
@@ -33,7 +33,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
           name: '',
           role: '',
           content: '',
-          rating: '5',
+          rating: 5,
           avatar_url: ''
         };
       default:
@@ -44,15 +44,14 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const collection = type === 'gallery' ? 'gallery' : type === 'product' ? 'products' : 'testimonials';
-      
-      // Process form data based on type
-      let processedData = { ...formData };
-      if (type === 'testimonial') {
-        processedData.rating = parseInt(formData.rating as string);
+      if (type === 'gallery') {
+        await createGalleryItem(formData as any);
+      } else if (type === 'product') {
+        await createProduct(formData as any);
+      } else if (type === 'testimonial') {
+        await createTestimonial(formData as any);
       }
       
-      await add(collection, processedData);
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully`);
       onSuccess();
       onClose();
@@ -65,7 +64,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
               title: '',
               image_url: '',
               description: '',
-              category: 'Corporate'
+              category: 'Corporate' as const
             };
           case 'product':
             return {
@@ -79,7 +78,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
               name: '',
               role: '',
               content: '',
-              rating: '5',
+              rating: 5,
               avatar_url: ''
             };
           default:
@@ -94,7 +93,10 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
+    setFormData(prev => ({ 
+      ...prev, 
+      [id]: id === 'rating' ? parseInt(value) : value 
+    }));
   };
 
   if (!isOpen) return null;
@@ -214,16 +216,16 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
                 <label className="block text-sm font-medium text-gray-300 mb-2">Rating (1-5)</label>
                 <select
                   id="rating"
-                  value={formData.rating || '5'}
+                  value={formData.rating || 5}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
                 >
-                  <option value="1">1 Star</option>
-                  <option value="2">2 Stars</option>
-                  <option value="3">3 Stars</option>
-                  <option value="4">4 Stars</option>
-                  <option value="5">5 Stars</option>
+                  <option value={1}>1 Star</option>
+                  <option value={2}>2 Stars</option>
+                  <option value={3}>3 Stars</option>
+                  <option value={4}>4 Stars</option>
+                  <option value={5}>5 Stars</option>
                 </select>
               </div>
             </>
