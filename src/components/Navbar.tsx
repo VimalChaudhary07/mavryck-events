@@ -20,20 +20,35 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
   const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-      setIsOpen(false); // Close mobile menu
+    // If we're not on the home page, navigate there first
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Wait for navigation to complete, then scroll
+      setTimeout(() => {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          element.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      }, 100);
+    } else {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
     }
+    setIsOpen(false); // Close mobile menu
   };
 
   const handleNavClick = (href: string) => {
@@ -43,6 +58,15 @@ export function Navbar() {
     } else {
       setIsOpen(false);
     }
+  };
+
+  const handleHomeClick = () => {
+    if (location.pathname !== '/') {
+      navigate('/');
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    setIsOpen(false);
   };
 
   return (
@@ -55,7 +79,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <button 
-              onClick={() => handleNavClick('#')}
+              onClick={handleHomeClick}
               className="flex items-center space-x-2 group"
             >
               <Calendar className="h-8 w-8 text-orange-500 group-hover:text-orange-400 transition-colors" />
@@ -68,25 +92,25 @@ export function Navbar() {
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-8">
               <button
-                onClick={() => handleNavClick('#')}
+                onClick={handleHomeClick}
                 className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
               >
                 Home
               </button>
               <button
-                onClick={() => handleNavClick('#services')}
+                onClick={() => scrollToSection('services')}
                 className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
               >
                 Services
               </button>
               <button
-                onClick={() => handleNavClick('#gallery')}
+                onClick={() => scrollToSection('gallery')}
                 className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
               >
                 Gallery
               </button>
               <button
-                onClick={() => handleNavClick('#contact')}
+                onClick={() => scrollToSection('contact')}
                 className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
               >
                 Contact
@@ -123,25 +147,25 @@ export function Navbar() {
         <div className="md:hidden bg-black/95 backdrop-blur-md border-t border-gray-800">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             <button
-              onClick={() => handleNavClick('#')}
+              onClick={handleHomeClick}
               className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Home
             </button>
             <button
-              onClick={() => handleNavClick('#services')}
+              onClick={() => scrollToSection('services')}
               className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Services
             </button>
             <button
-              onClick={() => handleNavClick('#gallery')}
+              onClick={() => scrollToSection('gallery')}
               className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Gallery
             </button>
             <button
-              onClick={() => handleNavClick('#contact')}
+              onClick={() => scrollToSection('contact')}
               className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Contact

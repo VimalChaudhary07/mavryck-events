@@ -1,4 +1,4 @@
-import { supabase, handleSupabaseError } from './supabase';
+import { supabase, handleSupabaseError, withAuth } from './supabase';
 import type { 
   EventRequest, 
   ContactMessage, 
@@ -24,6 +24,7 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
     if (error) handleSupabaseError(error);
     return result;
   } catch (error) {
+    console.error('Failed to create event request:', error);
     handleSupabaseError(error);
     throw error;
   }
@@ -39,13 +40,13 @@ export async function getEventRequests(): Promise<EventRequest[]> {
     if (error) handleSupabaseError(error);
     return data || [];
   } catch (error) {
-    handleSupabaseError(error);
+    console.error('Failed to fetch event requests:', error);
     return [];
   }
 }
 
 export async function updateEventRequest(id: string, updates: Partial<EventRequest>): Promise<EventRequest> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('event_requests')
       .update(updates)
@@ -55,24 +56,18 @@ export async function updateEventRequest(id: string, updates: Partial<EventReque
 
     if (error) handleSupabaseError(error);
     return data;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function deleteEventRequest(id: string): Promise<void> {
-  try {
+  return withAuth(async () => {
     const { error } = await supabase
       .from('event_requests')
       .delete()
       .eq('id', id);
 
     if (error) handleSupabaseError(error);
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 // Contact Messages
@@ -87,6 +82,7 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
     if (error) handleSupabaseError(error);
     return result;
   } catch (error) {
+    console.error('Failed to create contact message:', error);
     handleSupabaseError(error);
     throw error;
   }
@@ -102,13 +98,13 @@ export async function getContactMessages(): Promise<ContactMessage[]> {
     if (error) handleSupabaseError(error);
     return data || [];
   } catch (error) {
-    handleSupabaseError(error);
+    console.error('Failed to fetch contact messages:', error);
     return [];
   }
 }
 
 export async function updateContactMessage(id: string, updates: Partial<ContactMessage>): Promise<ContactMessage> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('contact_messages')
       .update(updates)
@@ -118,29 +114,23 @@ export async function updateContactMessage(id: string, updates: Partial<ContactM
 
     if (error) handleSupabaseError(error);
     return data;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function deleteContactMessage(id: string): Promise<void> {
-  try {
+  return withAuth(async () => {
     const { error } = await supabase
       .from('contact_messages')
       .delete()
       .eq('id', id);
 
     if (error) handleSupabaseError(error);
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 // Gallery Items
 export async function createGalleryItem(data: GalleryItemInsert): Promise<GalleryItem> {
-  try {
+  return withAuth(async () => {
     const { data: result, error } = await supabase
       .from('gallery')
       .insert(data)
@@ -149,10 +139,7 @@ export async function createGalleryItem(data: GalleryItemInsert): Promise<Galler
 
     if (error) handleSupabaseError(error);
     return result;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function getGalleryItems(): Promise<GalleryItem[]> {
@@ -165,45 +152,40 @@ export async function getGalleryItems(): Promise<GalleryItem[]> {
     if (error) handleSupabaseError(error);
     return data || [];
   } catch (error) {
-    handleSupabaseError(error);
+    console.error('Failed to fetch gallery items:', error);
     return [];
   }
 }
 
 export async function updateGalleryItem(id: string, updates: Partial<GalleryItem>): Promise<GalleryItem> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('gallery')
       .update(updates)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single to handle no results
 
     if (error) handleSupabaseError(error);
+    if (!data) throw new Error('Gallery item not found');
     return data;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function deleteGalleryItem(id: string): Promise<void> {
-  try {
+  return withAuth(async () => {
     const { error } = await supabase
       .from('gallery')
       .delete()
       .eq('id', id);
 
     if (error) handleSupabaseError(error);
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 // Products
 export async function createProduct(data: ProductInsert): Promise<Product> {
-  try {
+  return withAuth(async () => {
     const { data: result, error } = await supabase
       .from('products')
       .insert(data)
@@ -212,10 +194,7 @@ export async function createProduct(data: ProductInsert): Promise<Product> {
 
     if (error) handleSupabaseError(error);
     return result;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function getProducts(): Promise<Product[]> {
@@ -228,45 +207,40 @@ export async function getProducts(): Promise<Product[]> {
     if (error) handleSupabaseError(error);
     return data || [];
   } catch (error) {
-    handleSupabaseError(error);
+    console.error('Failed to fetch products:', error);
     return [];
   }
 }
 
 export async function updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('products')
       .update(updates)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) handleSupabaseError(error);
+    if (!data) throw new Error('Product not found');
     return data;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  try {
+  return withAuth(async () => {
     const { error } = await supabase
       .from('products')
       .delete()
       .eq('id', id);
 
     if (error) handleSupabaseError(error);
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 // Testimonials
 export async function createTestimonial(data: TestimonialInsert): Promise<Testimonial> {
-  try {
+  return withAuth(async () => {
     const { data: result, error } = await supabase
       .from('testimonials')
       .insert(data)
@@ -275,10 +249,7 @@ export async function createTestimonial(data: TestimonialInsert): Promise<Testim
 
     if (error) handleSupabaseError(error);
     return result;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function getTestimonials(): Promise<Testimonial[]> {
@@ -291,38 +262,33 @@ export async function getTestimonials(): Promise<Testimonial[]> {
     if (error) handleSupabaseError(error);
     return data || [];
   } catch (error) {
-    handleSupabaseError(error);
+    console.error('Failed to fetch testimonials:', error);
     return [];
   }
 }
 
 export async function updateTestimonial(id: string, updates: Partial<Testimonial>): Promise<Testimonial> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('testimonials')
       .update(updates)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) handleSupabaseError(error);
+    if (!data) throw new Error('Testimonial not found');
     return data;
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }
 
 export async function deleteTestimonial(id: string): Promise<void> {
-  try {
+  return withAuth(async () => {
     const { error } = await supabase
       .from('testimonials')
       .delete()
       .eq('id', id);
 
     if (error) handleSupabaseError(error);
-  } catch (error) {
-    handleSupabaseError(error);
-    throw error;
-  }
+  });
 }

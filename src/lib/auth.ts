@@ -1,4 +1,5 @@
 import { toast } from 'react-hot-toast';
+import { supabase } from './supabase';
 
 interface AuthCredentials {
   email: string;
@@ -14,9 +15,17 @@ export const isAuthenticated = () => {
   return localStorage.getItem('isAuthenticated') === 'true';
 };
 
-export const login = (email: string, password: string): boolean => {
+export const login = async (email: string, password: string): Promise<boolean> => {
   if (email === VALID_CREDENTIALS.email && password === VALID_CREDENTIALS.password) {
     localStorage.setItem('isAuthenticated', 'true');
+    
+    // Create a session in Supabase for authenticated operations
+    try {
+      await supabase.auth.signInAnonymously();
+    } catch (error) {
+      console.warn('Failed to create anonymous session:', error);
+    }
+    
     toast.success('Welcome back, Admin!');
     return true;
   }
@@ -25,7 +34,14 @@ export const login = (email: string, password: string): boolean => {
   return false;
 };
 
-export const logout = () => {
+export const logout = async () => {
   localStorage.removeItem('isAuthenticated');
+  
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.warn('Failed to sign out from Supabase:', error);
+  }
+  
   toast.success('Logged out successfully');
 };
