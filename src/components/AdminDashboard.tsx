@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical, Plus } from 'lucide-react';
+import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical, Plus, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { 
@@ -14,7 +14,8 @@ import {
   deleteProduct,
   deleteTestimonial,
   updateEventRequest,
-  updateContactMessage
+  updateContactMessage,
+  testDatabaseConnection
 } from '../lib/database';
 import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
 import { AddItemModal } from './AddItemModal';
@@ -47,32 +48,86 @@ export function AdminDashboard() {
   const [selectedEvent, setSelectedEvent] = useState<EventRequest | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadData();
+    checkConnectionAndLoadData();
   }, []);
+
+  const checkConnectionAndLoadData = async () => {
+    try {
+      setConnectionStatus('checking');
+      const isConnected = await testDatabaseConnection();
+      
+      if (isConnected) {
+        setConnectionStatus('connected');
+        await loadData();
+      } else {
+        setConnectionStatus('disconnected');
+        toast.error('Database connection failed. Please check your connection.');
+      }
+    } catch (error) {
+      console.error('Connection check failed:', error);
+      setConnectionStatus('disconnected');
+      toast.error('Failed to connect to database');
+    }
+  };
 
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('Loading dashboard data...');
+      
       const [eventsData, messagesData, galleryData, productsData, testimonialsData] = await Promise.all([
-        getEventRequests(),
-        getContactMessages(),
-        getGalleryItems(),
-        getProducts(),
-        getTestimonials()
+        getEventRequests().catch(err => {
+          console.error('Failed to load events:', err);
+          return [];
+        }),
+        getContactMessages().catch(err => {
+          console.error('Failed to load messages:', err);
+          return [];
+        }),
+        getGalleryItems().catch(err => {
+          console.error('Failed to load gallery:', err);
+          return [];
+        }),
+        getProducts().catch(err => {
+          console.error('Failed to load products:', err);
+          return [];
+        }),
+        getTestimonials().catch(err => {
+          console.error('Failed to load testimonials:', err);
+          return [];
+        })
       ]);
+      
       setEvents(eventsData || []);
       setMessages(messagesData || []);
       setGalleryItems(galleryData || []);
       setProducts(productsData || []);
       setTestimonials(testimonialsData || []);
+      
+      console.log('Dashboard data loaded successfully:', {
+        events: eventsData?.length || 0,
+        messages: messagesData?.length || 0,
+        gallery: galleryData?.length || 0,
+        products: productsData?.length || 0,
+        testimonials: testimonialsData?.length || 0
+      });
     } catch (error) {
       console.error('Failed to load data:', error);
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await checkConnectionAndLoadData();
+    setRefreshing(false);
+    toast.success('Data refreshed successfully');
   };
 
   // Bulk delete functionality
@@ -324,7 +379,7 @@ export function AdminDashboard() {
     }
   };
 
-  if (loading) {
+  if (loading && connectionStatus === 'checking') {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -338,9 +393,40 @@ export function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Header */}
+        {/* Header with Connection Status */}
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Admin Dashboard</h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Dashboard</h1>
+            <div className="flex items-center gap-4">
+              {/* Connection Status */}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
+                connectionStatus === 'connected' 
+                  ? 'bg-green-500/10 text-green-400' 
+                  : connectionStatus === 'disconnected'
+                  ? 'bg-red-500/10 text-red-400'
+                  : 'bg-yellow-500/10 text-yellow-400'
+              }`}>
+                {connectionStatus === 'connected' ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : connectionStatus === 'disconnected' ? (
+                  <AlertCircle className="w-4 h-4" />
+                ) : (
+                  <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                )}
+                <span className="capitalize">{connectionStatus}</span>
+              </div>
+              
+              {/* Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+            </div>
+          </div>
           <p className="text-gray-400">Manage your events, messages, and content</p>
         </div>
 
