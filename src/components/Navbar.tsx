@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, X, Calendar } from 'lucide-react';
 import { Link } from './Link';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -6,32 +6,91 @@ import { isAuthenticated, logout } from '../lib/auth';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const auth = isAuthenticated();
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
 
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+      setIsOpen(false); // Close mobile menu
+    }
+  };
+
+  const handleNavClick = (href: string) => {
+    if (href.startsWith('#')) {
+      const sectionId = href.substring(1);
+      scrollToSection(sectionId);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
   return (
-    <nav className="bg-black/95 fixed w-full z-50 top-0">
+    <nav className={`fixed w-full z-50 top-0 transition-all duration-300 ${
+      isScrolled 
+        ? 'bg-black/95 backdrop-blur-md shadow-lg' 
+        : 'bg-black/80 backdrop-blur-sm'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <Calendar className="h-8 w-8 text-orange-500" />
-              <span className="text-white font-bold text-xl">mavryck_events</span>
-            </Link>
+            <button 
+              onClick={() => handleNavClick('#')}
+              className="flex items-center space-x-2 group"
+            >
+              <Calendar className="h-8 w-8 text-orange-500 group-hover:text-orange-400 transition-colors" />
+              <span className="text-white font-bold text-xl group-hover:text-orange-400 transition-colors">
+                mavryck_events
+              </span>
+            </button>
           </div>
           
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-8">
-              <Link href="/">Home</Link>
-              <Link href="#services">Services</Link>
-              <Link href="#gallery">Gallery</Link>
-              <Link href="#contact">Contact</Link>
+              <button
+                onClick={() => handleNavClick('#')}
+                className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
+              >
+                Home
+              </button>
+              <button
+                onClick={() => handleNavClick('#services')}
+                className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
+              >
+                Services
+              </button>
+              <button
+                onClick={() => handleNavClick('#gallery')}
+                className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
+              >
+                Gallery
+              </button>
+              <button
+                onClick={() => handleNavClick('#contact')}
+                className="text-gray-300 hover:text-orange-500 transition-colors duration-200 text-sm font-medium"
+              >
+                Contact
+              </button>
               {auth ? (
                 <>
                   <Link href="/admin/dashboard">Dashboard</Link>
@@ -51,7 +110,7 @@ export function Navbar() {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-gray-400 hover:text-white focus:outline-none"
+              className="text-gray-400 hover:text-white focus:outline-none transition-colors"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -59,13 +118,34 @@ export function Navbar() {
         </div>
       </div>
 
+      {/* Mobile menu */}
       {isOpen && (
-        <div className="md:hidden">
+        <div className="md:hidden bg-black/95 backdrop-blur-md border-t border-gray-800">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link href="/" mobile>Home</Link>
-            <Link href="#services" mobile>Services</Link>
-            <Link href="#gallery" mobile>Gallery</Link>
-            <Link href="#contact" mobile>Contact</Link>
+            <button
+              onClick={() => handleNavClick('#')}
+              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+            >
+              Home
+            </button>
+            <button
+              onClick={() => handleNavClick('#services')}
+              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+            >
+              Services
+            </button>
+            <button
+              onClick={() => handleNavClick('#gallery')}
+              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+            >
+              Gallery
+            </button>
+            <button
+              onClick={() => handleNavClick('#contact')}
+              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+            >
+              Contact
+            </button>
             {auth ? (
               <>
                 <Link href="/admin/dashboard" mobile>Dashboard</Link>

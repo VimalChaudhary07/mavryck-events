@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail } from 'lucide-react';
+import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { 
@@ -22,11 +22,15 @@ import { EditItemModal } from './EditItemModal';
 import { EventDetailsModal } from './EventDetailsModal';
 import { MessageDetailsModal } from './MessageDetailsModal';
 import { AdminSettings } from './AdminSettings';
+import { ExportModal } from './ExportModal';
+import * as XLSX from 'xlsx';
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('events');
   const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'pending' | 'ongoing' | 'completed'>('all');
   const [messageFilter, setMessageFilter] = useState<'all' | 'new' | 'viewed'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [events, setEvents] = useState<EventRequest[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
@@ -36,6 +40,7 @@ export function AdminDashboard() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
   const [isMessageDetailsOpen, setIsMessageDetailsOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editModalType, setEditModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -70,7 +75,85 @@ export function AdminDashboard() {
     }
   };
 
+  // Bulk delete functionality
+  const handleBulkDelete = async (type: 'events' | 'messages') => {
+    if (selectedItems.length === 0) {
+      toast.error('No items selected');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ${selectedItems.length} ${type}? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      const deletePromises = selectedItems.map(id => 
+        type === 'events' ? deleteEventRequest(id) : deleteContactMessage(id)
+      );
+      
+      await Promise.all(deletePromises);
+      toast.success(`${selectedItems.length} ${type} deleted successfully`);
+      setSelectedItems([]);
+      loadData();
+    } catch (error) {
+      console.error(`Failed to delete ${type}:`, error);
+      toast.error(`Failed to delete ${type}`);
+    }
+  };
+
+  // Quick export functionality
+  const handleQuickExport = (type: 'events' | 'messages') => {
+    try {
+      const data = type === 'events' ? filteredEvents : filteredMessages;
+      
+      if (data.length === 0) {
+        toast.error(`No ${type} to export`);
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      
+      if (type === 'events') {
+        const eventsData = data.map(event => ({
+          ID: event.id,
+          Name: event.name,
+          Email: event.email,
+          Phone: event.phone,
+          'Event Type': event.event_type,
+          'Event Date': new Date(event.event_date).toLocaleDateString(),
+          'Guest Count': event.guest_count,
+          Requirements: event.requirements,
+          Status: event.status,
+          'Created At': new Date(event.created_at).toLocaleString()
+        }));
+        
+        const worksheet = XLSX.utils.json_to_sheet(eventsData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Event Requests');
+      } else {
+        const messagesData = data.map(message => ({
+          ID: message.id,
+          Name: message.name,
+          Email: message.email,
+          Message: message.message,
+          Viewed: message.viewed ? 'Yes' : 'No',
+          'Created At': new Date(message.created_at).toLocaleString()
+        }));
+        
+        const worksheet = XLSX.utils.json_to_sheet(messagesData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Contact Messages');
+      }
+
+      const filename = `${type}-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+      toast.success(`${type} exported successfully`);
+    } catch (error) {
+      console.error(`Failed to export ${type}:`, error);
+      toast.error(`Failed to export ${type}`);
+    }
+  };
+
   const handleDeleteEvent = async (eventId: string) => {
+    if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+    
     try {
       await deleteEventRequest(eventId);
       toast.success('Event deleted successfully');
@@ -82,6 +165,8 @@ export function AdminDashboard() {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm('Are you sure you want to delete this message? This action cannot be undone.')) return;
+    
     try {
       await deleteContactMessage(messageId);
       toast.success('Message deleted successfully');
@@ -93,6 +178,8 @@ export function AdminDashboard() {
   };
 
   const handleDeleteGalleryItem = async (itemId: string) => {
+    if (!window.confirm('Are you sure you want to delete this gallery item? This action cannot be undone.')) return;
+    
     try {
       await deleteGalleryItem(itemId);
       toast.success('Gallery item deleted successfully');
@@ -104,6 +191,8 @@ export function AdminDashboard() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    if (!window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) return;
+    
     try {
       await deleteProduct(productId);
       toast.success('Product deleted successfully');
@@ -115,6 +204,8 @@ export function AdminDashboard() {
   };
 
   const handleDeleteTestimonial = async (testimonialId: string) => {
+    if (!window.confirm('Are you sure you want to delete this testimonial? This action cannot be undone.')) return;
+    
     try {
       await deleteTestimonial(testimonialId);
       toast.success('Testimonial deleted successfully');
@@ -181,17 +272,26 @@ export function AdminDashboard() {
     return Math.max(1, Math.min(5, Math.floor(rating) || 1));
   };
 
-  // Filter events by status
-  const filteredEvents = eventStatusFilter === 'all' 
-    ? events 
-    : events.filter(event => event.status === eventStatusFilter);
+  // Filter and search functionality
+  const filteredEvents = events.filter(event => {
+    const matchesStatus = eventStatusFilter === 'all' || event.status === eventStatusFilter;
+    const matchesSearch = searchTerm === '' || 
+      event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.event_type.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
-  // Filter messages by viewed status
-  const filteredMessages = messageFilter === 'all' 
-    ? messages 
-    : messageFilter === 'new' 
-      ? messages.filter(message => !message.viewed)
-      : messages.filter(message => message.viewed);
+  const filteredMessages = messages.filter(message => {
+    const matchesFilter = messageFilter === 'all' || 
+      (messageFilter === 'new' && !message.viewed) ||
+      (messageFilter === 'viewed' && message.viewed);
+    const matchesSearch = searchTerm === '' ||
+      message.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.message.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   // Count events by status
   const eventCounts = {
@@ -341,51 +441,88 @@ export function AdminDashboard() {
           <div className="flex-1">
             {activeTab === 'events' && (
               <div className="bg-gray-800 rounded-xl p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
                   <h2 className="text-xl font-semibold text-white">Event Requests</h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setEventStatusFilter('all')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        eventStatusFilter === 'all'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      All ({events.length})
-                    </button>
-                    <button
-                      onClick={() => setEventStatusFilter('pending')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        eventStatusFilter === 'pending'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      New ({eventCounts.pending})
-                    </button>
-                    <button
-                      onClick={() => setEventStatusFilter('ongoing')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        eventStatusFilter === 'ongoing'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      Ongoing ({eventCounts.ongoing})
-                    </button>
-                    <button
-                      onClick={() => setEventStatusFilter('completed')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        eventStatusFilter === 'completed'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      Completed ({eventCounts.completed})
-                    </button>
+                  
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search events..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleQuickExport('events')}
+                        className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export
+                      </button>
+                      
+                      {selectedItems.length > 0 && (
+                        <button
+                          onClick={() => handleBulkDelete('events')}
+                          className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete ({selectedItems.length})
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Status Filter Buttons */}
+                <div className="flex gap-2 mb-6 flex-wrap">
+                  <button
+                    onClick={() => setEventStatusFilter('all')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      eventStatusFilter === 'all'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    All ({events.length})
+                  </button>
+                  <button
+                    onClick={() => setEventStatusFilter('pending')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      eventStatusFilter === 'pending'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    New ({eventCounts.pending})
+                  </button>
+                  <button
+                    onClick={() => setEventStatusFilter('ongoing')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      eventStatusFilter === 'ongoing'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Ongoing ({eventCounts.ongoing})
+                  </button>
+                  <button
+                    onClick={() => setEventStatusFilter('completed')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      eventStatusFilter === 'completed'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Completed ({eventCounts.completed})
+                  </button>
+                </div>
+
                 <div className="space-y-4">
                   {filteredEvents.map((event) => (
                     <motion.div
@@ -395,25 +532,39 @@ export function AdminDashboard() {
                       className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-medium text-white">{event.name}</h3>
-                            <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                              {getStatusLabel(event.status)}
+                        <div className="flex items-start gap-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.includes(event.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedItems(prev => [...prev, event.id]);
+                              } else {
+                                setSelectedItems(prev => prev.filter(id => id !== event.id));
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-lg font-medium text-white">{event.name}</h3>
+                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                                {getStatusLabel(event.status)}
+                              </div>
                             </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-400">Email: </span>
-                              <span className="text-gray-300">{event.email}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400">Phone: </span>
-                              <span className="text-gray-300">{event.phone}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400">Event: </span>
-                              <span className="text-orange-500 capitalize">{event.event_type}</span>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-400">Email: </span>
+                                <span className="text-gray-300">{event.email}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Phone: </span>
+                                <span className="text-gray-300">{event.phone}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Event: </span>
+                                <span className="text-orange-500 capitalize">{event.event_type}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -461,46 +612,83 @@ export function AdminDashboard() {
 
             {activeTab === 'messages' && (
               <div className="bg-gray-800 rounded-xl p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
                   <h2 className="text-xl font-semibold text-white">Contact Messages</h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setMessageFilter('all')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        messageFilter === 'all'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      All ({messages.length})
-                    </button>
-                    <button
-                      onClick={() => setMessageFilter('new')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        messageFilter === 'new'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      New ({messageCounts.new})
-                      {messageCounts.new > 0 && (
-                        <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                          {messageCounts.new}
-                        </span>
+                  
+                  {/* Search and Actions */}
+                  <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search messages..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleQuickExport('messages')}
+                        className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export
+                      </button>
+                      
+                      {selectedItems.length > 0 && (
+                        <button
+                          onClick={() => handleBulkDelete('messages')}
+                          className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete ({selectedItems.length})
+                        </button>
                       )}
-                    </button>
-                    <button
-                      onClick={() => setMessageFilter('viewed')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        messageFilter === 'viewed'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      Viewed ({messageCounts.viewed})
-                    </button>
+                    </div>
                   </div>
                 </div>
+
+                {/* Message Filter Buttons */}
+                <div className="flex gap-2 mb-6 flex-wrap">
+                  <button
+                    onClick={() => setMessageFilter('all')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      messageFilter === 'all'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    All ({messages.length})
+                  </button>
+                  <button
+                    onClick={() => setMessageFilter('new')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      messageFilter === 'new'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    New ({messageCounts.new})
+                    {messageCounts.new > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                        {messageCounts.new}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setMessageFilter('viewed')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      messageFilter === 'viewed'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Viewed ({messageCounts.viewed})
+                  </button>
+                </div>
+
                 <div className="space-y-4">
                   {filteredMessages.map((message) => (
                     <motion.div
@@ -510,24 +698,38 @@ export function AdminDashboard() {
                       className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-medium text-white">{message.name}</h3>
-                            <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              message.viewed 
-                                ? 'text-green-400 bg-green-400/10' 
-                                : 'text-yellow-400 bg-yellow-400/10'
-                            }`}>
-                              {message.viewed ? 'Viewed' : 'New'}
+                        <div className="flex items-start gap-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.includes(message.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedItems(prev => [...prev, message.id]);
+                              } else {
+                                setSelectedItems(prev => prev.filter(id => id !== message.id));
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-lg font-medium text-white">{message.name}</h3>
+                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                message.viewed 
+                                  ? 'text-green-400 bg-green-400/10' 
+                                  : 'text-yellow-400 bg-yellow-400/10'
+                              }`}>
+                                {message.viewed ? 'Viewed' : 'New'}
+                              </div>
                             </div>
+                            <p className="text-gray-400 mb-2">{message.email}</p>
+                            <p className="text-gray-300 text-sm line-clamp-2">
+                              {message.message.length > 100 
+                                ? `${message.message.substring(0, 100)}...` 
+                                : message.message
+                              }
+                            </p>
                           </div>
-                          <p className="text-gray-400 mb-2">{message.email}</p>
-                          <p className="text-gray-300 text-sm line-clamp-2">
-                            {message.message.length > 100 
-                              ? `${message.message.substring(0, 100)}...` 
-                              : message.message
-                            }
-                          </p>
                         </div>
                         <div className="flex gap-2 ml-4">
                           <button
@@ -752,6 +954,13 @@ export function AdminDashboard() {
           setSelectedMessage(null);
         }}
         onMarkAsViewed={handleMarkMessageAsViewed}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        events={events}
+        messages={messages}
       />
     </div>
   );
