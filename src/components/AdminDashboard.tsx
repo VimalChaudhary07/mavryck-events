@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical } from 'lucide-react';
+import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { 
@@ -337,93 +337,105 @@ export function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Admin Dashboard</h1>
+          <p className="text-gray-400">Manage your events, messages, and content</p>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Sidebar */}
-          <div className="w-full md:w-64 space-y-2">
-            <button
-              onClick={() => setActiveTab('events')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'events'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <Calendar className="w-5 h-5" />
-              Events ({events.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('messages')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'messages'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              Messages ({messages.length})
-              {messageCounts.new > 0 && (
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                  {messageCounts.new}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('gallery')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'gallery'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <Image className="w-5 h-5" />
-              Gallery ({galleryItems.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'products'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <Package className="w-5 h-5" />
-              Products ({products.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('testimonials')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'testimonials'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <Star className="w-5 h-5" />
-              Testimonials ({testimonials.length})
-            </button>
-            <div className="border-t border-gray-700 pt-2">
+          <div className="w-full lg:w-64 space-y-2">
+            <div className="bg-gray-800 rounded-xl p-4 space-y-2">
+              <h3 className="text-white font-semibold mb-3">Navigation</h3>
               <button
-                onClick={() => handleAddModalOpen('gallery')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+                onClick={() => setActiveTab('events')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
+                  activeTab === 'events'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <Calendar className="w-5 h-5" />
+                <span>Events ({events.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
+                  activeTab === 'messages'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>Messages ({messages.length})</span>
+                {messageCounts.new > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-auto">
+                    {messageCounts.new}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('gallery')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
+                  activeTab === 'gallery'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
               >
                 <Image className="w-5 h-5" />
-                Add to Gallery
+                <span>Gallery ({galleryItems.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('products')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
+                  activeTab === 'products'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <Package className="w-5 h-5" />
+                <span>Products ({products.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('testimonials')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
+                  activeTab === 'testimonials'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <Star className="w-5 h-5" />
+                <span>Testimonials ({testimonials.length})</span>
+              </button>
+            </div>
+
+            <div className="bg-gray-800 rounded-xl p-4 space-y-2">
+              <h3 className="text-white font-semibold mb-3">Quick Actions</h3>
+              <button
+                onClick={() => handleAddModalOpen('gallery')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Gallery Item</span>
               </button>
               <button
                 onClick={() => handleAddModalOpen('product')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
               >
-                <Package className="w-5 h-5" />
-                Add Product
+                <Plus className="w-5 h-5" />
+                <span>Add Product</span>
               </button>
               <button
                 onClick={() => handleAddModalOpen('testimonial')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
               >
-                <Star className="w-5 h-5" />
-                Add Testimonial
+                <Plus className="w-5 h-5" />
+                <span>Add Testimonial</span>
               </button>
             </div>
+
             <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -433,14 +445,14 @@ export function AdminDashboard() {
               }`}
             >
               <Settings className="w-5 h-5" />
-              Settings
+              <span>Settings</span>
             </button>
           </div>
 
           {/* Main Content */}
           <div className="flex-1">
             {activeTab === 'events' && (
-              <div className="bg-gray-800 rounded-xl p-6">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
                   <h2 className="text-xl font-semibold text-white">Event Requests</h2>
                   
@@ -453,7 +465,7 @@ export function AdminDashboard() {
                         placeholder="Search events..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-auto"
                       />
                     </div>
                     
@@ -463,7 +475,7 @@ export function AdminDashboard() {
                         className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
                       >
                         <Download className="w-4 h-4" />
-                        Export
+                        <span className="hidden sm:inline">Export</span>
                       </button>
                       
                       {selectedItems.length > 0 && (
@@ -472,7 +484,8 @@ export function AdminDashboard() {
                           className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
-                          Delete ({selectedItems.length})
+                          <span className="hidden sm:inline">Delete ({selectedItems.length})</span>
+                          <span className="sm:hidden">({selectedItems.length})</span>
                         </button>
                       )}
                     </div>
@@ -483,7 +496,7 @@ export function AdminDashboard() {
                 <div className="flex gap-2 mb-6 flex-wrap">
                   <button
                     onClick={() => setEventStatusFilter('all')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       eventStatusFilter === 'all'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -493,7 +506,7 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setEventStatusFilter('pending')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       eventStatusFilter === 'pending'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -503,7 +516,7 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setEventStatusFilter('ongoing')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       eventStatusFilter === 'ongoing'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -513,7 +526,7 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setEventStatusFilter('completed')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       eventStatusFilter === 'completed'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -532,7 +545,7 @@ export function AdminDashboard() {
                       className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 flex-1">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
                           <input
                             type="checkbox"
                             checked={selectedItems.includes(event.id)}
@@ -543,17 +556,17 @@ export function AdminDashboard() {
                                 setSelectedItems(prev => prev.filter(id => id !== event.id));
                               }
                             }}
-                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500"
+                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500 flex-shrink-0"
                           />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-medium text-white">{event.name}</h3>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                              <h3 className="text-lg font-medium text-white truncate">{event.name}</h3>
                               <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
                                 {getStatusLabel(event.status)}
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                              <div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-sm">
+                              <div className="truncate">
                                 <span className="text-gray-400">Email: </span>
                                 <span className="text-gray-300">{event.email}</span>
                               </div>
@@ -568,34 +581,34 @@ export function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
                           <button
                             onClick={() => handleEventClick(event)}
                             className="text-blue-500 hover:text-blue-400 p-2"
                             title="View Details"
                           >
-                            <Eye className="w-5 h-5" />
+                            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                           <a
                             href={`tel:${event.phone}`}
                             className="text-green-500 hover:text-green-400 p-2"
                             title="Call"
                           >
-                            <Phone className="w-5 h-5" />
+                            <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
                           </a>
                           <a
                             href={`mailto:${event.email}`}
                             className="text-orange-500 hover:text-orange-400 p-2"
                             title="Email"
                           >
-                            <Mail className="w-5 h-5" />
+                            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
                           </a>
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
                             className="text-red-500 hover:text-red-400 p-2"
                             title="Delete"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       </div>
@@ -611,7 +624,7 @@ export function AdminDashboard() {
             )}
 
             {activeTab === 'messages' && (
-              <div className="bg-gray-800 rounded-xl p-6">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
                   <h2 className="text-xl font-semibold text-white">Contact Messages</h2>
                   
@@ -624,7 +637,7 @@ export function AdminDashboard() {
                         placeholder="Search messages..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-auto"
                       />
                     </div>
                     
@@ -634,7 +647,7 @@ export function AdminDashboard() {
                         className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
                       >
                         <Download className="w-4 h-4" />
-                        Export
+                        <span className="hidden sm:inline">Export</span>
                       </button>
                       
                       {selectedItems.length > 0 && (
@@ -643,7 +656,8 @@ export function AdminDashboard() {
                           className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
-                          Delete ({selectedItems.length})
+                          <span className="hidden sm:inline">Delete ({selectedItems.length})</span>
+                          <span className="sm:hidden">({selectedItems.length})</span>
                         </button>
                       )}
                     </div>
@@ -654,7 +668,7 @@ export function AdminDashboard() {
                 <div className="flex gap-2 mb-6 flex-wrap">
                   <button
                     onClick={() => setMessageFilter('all')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       messageFilter === 'all'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -664,7 +678,7 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setMessageFilter('new')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       messageFilter === 'new'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -679,7 +693,7 @@ export function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => setMessageFilter('viewed')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       messageFilter === 'viewed'
                         ? 'bg-orange-500 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -698,7 +712,7 @@ export function AdminDashboard() {
                       className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 flex-1">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
                           <input
                             type="checkbox"
                             checked={selectedItems.includes(message.id)}
@@ -709,11 +723,11 @@ export function AdminDashboard() {
                                 setSelectedItems(prev => prev.filter(id => id !== message.id));
                               }
                             }}
-                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500"
+                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500 flex-shrink-0"
                           />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-medium text-white">{message.name}</h3>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                              <h3 className="text-lg font-medium text-white truncate">{message.name}</h3>
                               <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                 message.viewed 
                                   ? 'text-green-400 bg-green-400/10' 
@@ -722,7 +736,7 @@ export function AdminDashboard() {
                                 {message.viewed ? 'Viewed' : 'New'}
                               </div>
                             </div>
-                            <p className="text-gray-400 mb-2">{message.email}</p>
+                            <p className="text-gray-400 mb-2 text-sm truncate">{message.email}</p>
                             <p className="text-gray-300 text-sm line-clamp-2">
                               {message.message.length > 100 
                                 ? `${message.message.substring(0, 100)}...` 
@@ -731,27 +745,27 @@ export function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
                           <button
                             onClick={() => handleMessageClick(message)}
                             className="text-blue-500 hover:text-blue-400 p-2"
                             title="View Details"
                           >
-                            <Eye className="w-5 h-5" />
+                            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                           <a
                             href={`mailto:${message.email}`}
                             className="text-orange-500 hover:text-orange-400 p-2"
                             title="Reply"
                           >
-                            <Mail className="w-5 h-5" />
+                            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
                           </a>
                           <button
                             onClick={() => handleDeleteMessage(message.id)}
                             className="text-red-500 hover:text-red-400 p-2"
                             title="Delete"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       </div>
@@ -767,9 +781,18 @@ export function AdminDashboard() {
             )}
 
             {activeTab === 'gallery' && (
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-6">Gallery Items</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">Gallery Items</h2>
+                  <button
+                    onClick={() => handleAddModalOpen('gallery')}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Add Item</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {galleryItems.map((item) => (
                     <motion.div
                       key={item.id}
@@ -783,10 +806,10 @@ export function AdminDashboard() {
                         className="w-full h-48 object-cover"
                       />
                       <div className="p-4">
-                        <h3 className="text-white font-medium">{item.title}</h3>
+                        <h3 className="text-white font-medium truncate">{item.title}</h3>
                         <p className="text-orange-500 text-sm">{item.category}</p>
                         {item.description && (
-                          <p className="text-gray-400 text-sm mt-2">{item.description}</p>
+                          <p className="text-gray-400 text-sm mt-2 line-clamp-2">{item.description}</p>
                         )}
                         <div className="flex gap-2 mt-2">
                           <button
@@ -815,9 +838,18 @@ export function AdminDashboard() {
             )}
 
             {activeTab === 'products' && (
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-6">Products</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">Products</h2>
+                  <button
+                    onClick={() => handleAddModalOpen('product')}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Add Product</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {products.map((product) => (
                     <motion.div
                       key={product.id}
@@ -831,9 +863,9 @@ export function AdminDashboard() {
                         className="w-full h-48 object-cover"
                       />
                       <div className="p-4">
-                        <h3 className="text-white font-medium">{product.name}</h3>
+                        <h3 className="text-white font-medium truncate">{product.name}</h3>
                         <p className="text-orange-500 font-bold">{product.price}</p>
-                        <p className="text-gray-400 text-sm mt-2">{product.description}</p>
+                        <p className="text-gray-400 text-sm mt-2 line-clamp-2">{product.description}</p>
                         <div className="flex gap-2 mt-2">
                           <button
                             onClick={() => handleEditModalOpen('product', product)}
@@ -861,8 +893,17 @@ export function AdminDashboard() {
             )}
 
             {activeTab === 'testimonials' && (
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-6">Testimonials</h2>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-white">Testimonials</h2>
+                  <button
+                    onClick={() => handleAddModalOpen('testimonial')}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Add Testimonial</span>
+                  </button>
+                </div>
                 <div className="space-y-4">
                   {testimonials.map((testimonial) => (
                     <motion.div
@@ -872,13 +913,13 @@ export function AdminDashboard() {
                       className="bg-gray-700 rounded-lg p-4"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex gap-4">
+                        <div className="flex gap-4 flex-1">
                           <img
                             src={testimonial.avatar_url}
                             alt={testimonial.name}
-                            className="w-16 h-16 rounded-full object-cover"
+                            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0"
                           />
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <h3 className="text-white font-medium">{testimonial.name}</h3>
                             <p className="text-orange-500 text-sm">{testimonial.role}</p>
                             <div className="flex items-center gap-1 mt-1">
@@ -886,21 +927,21 @@ export function AdminDashboard() {
                                 <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
                               ))}
                             </div>
-                            <p className="text-gray-400 text-sm mt-2">{testimonial.content}</p>
+                            <p className="text-gray-400 text-sm mt-2 line-clamp-3">{testimonial.content}</p>
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 ml-4 flex-shrink-0">
                           <button
                             onClick={() => handleEditModalOpen('testimonial', testimonial)}
                             className="text-blue-500 hover:text-blue-400 p-2"
                           >
-                            <Edit className="w-5 h-5" />
+                            <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                           <button
                             onClick={() => handleDeleteTestimonial(testimonial.id)}
                             className="text-red-500 hover:text-red-400 p-2"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       </div>

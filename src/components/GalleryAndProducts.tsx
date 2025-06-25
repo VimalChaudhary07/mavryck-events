@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, ArrowRight, ArrowLeft, ExternalLink } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { getGalleryItems, getProducts } from '../lib/database';
 import type { GalleryItem, Product } from '../types/supabase';
 
@@ -78,7 +79,7 @@ export function GalleryAndProducts() {
 
   if (loading) {
     return (
-      <section id="gallery" className="py-20 bg-gradient-to-b from-gray-900 to-black">
+      <section id="gallery" className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-gray-900 to-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -90,25 +91,36 @@ export function GalleryAndProducts() {
   }
 
   return (
-    <section id="gallery" className="py-20 bg-gradient-to-b from-gray-900 to-black">
+    <section id="gallery" className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-gray-900 to-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Products Section */}
         {products.length > 0 && (
-          <div className="mb-24">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">Our Products</h2>
-              <p className="text-gray-400 max-w-2xl mx-auto">
+          <div className="mb-16 sm:mb-20 lg:mb-24">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-center mb-12 sm:mb-16"
+            >
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Our Products</h2>
+              <p className="text-gray-400 max-w-2xl mx-auto text-base sm:text-lg">
                 Enhance your events with our premium services
               </p>
-            </div>
+            </motion.div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {products.map((product) => (
-                <div
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+              {products.map((product, index) => (
+                <motion.div
                   key={product.id}
-                  className="bg-gray-800/50 backdrop-blur-sm rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 border border-gray-700"
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, delay: index * 0.2 }}
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-gray-800/50 backdrop-blur-sm rounded-xl overflow-hidden transition-all duration-300 border border-gray-700 hover:border-orange-500/50"
                 >
-                  <div className="h-64 overflow-hidden relative group">
+                  <div className="h-48 sm:h-64 overflow-hidden relative group">
                     <img
                       src={product.image_url}
                       alt={product.name}
@@ -116,24 +128,24 @@ export function GalleryAndProducts() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
-                  <div className="p-8">
+                  <div className="p-6 sm:p-8">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-2xl font-semibold text-white">{product.name}</h3>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-white">{product.name}</h3>
                       <div className="flex items-center">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
+                          <Star key={i} className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-current" />
                         ))}
                       </div>
                     </div>
-                    <p className="text-gray-400 mb-6">{product.description}</p>
+                    <p className="text-gray-400 mb-6 text-sm sm:text-base">{product.description}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-3xl font-bold text-orange-500">{product.price}</span>
-                      <button className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20">
+                      <span className="text-2xl sm:text-3xl font-bold text-orange-500">{product.price}</span>
+                      <button className="bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 text-sm sm:text-base">
                         Book Now
                       </button>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -141,17 +153,23 @@ export function GalleryAndProducts() {
 
         {/* Gallery Section */}
         <div>
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Event Gallery</h2>
-            <p className="text-gray-400 max-w-2xl mx-auto mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-12 sm:mb-16"
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Event Gallery</h2>
+            <p className="text-gray-400 max-w-2xl mx-auto mb-6 sm:mb-8 text-base sm:text-lg">
               Browse through our collection of successful events
             </p>
-            <div className="flex flex-wrap justify-center gap-4 mb-12">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-8 sm:mb-12">
               {categories.map((category) => (
                 <button
                   key={category}
                   onClick={() => handleCategoryChange(category)}
-                  className={`px-6 py-2 rounded-full font-medium transition-all duration-200 ${
+                  className={`px-3 sm:px-6 py-2 rounded-full font-medium transition-all duration-200 text-sm sm:text-base ${
                     selectedCategory === category
                       ? 'bg-orange-500 text-white'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -161,14 +179,18 @@ export function GalleryAndProducts() {
                 </button>
               ))}
             </div>
-          </div>
+          </motion.div>
           
           {filteredImages.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
                 {filteredImages.map((image, index) => (
-                  <div
+                  <motion.div
                     key={image.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: index * 0.1 }}
                     onClick={() => handleImageClick(index)}
                     className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
                   >
@@ -178,32 +200,38 @@ export function GalleryAndProducts() {
                       className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className="absolute bottom-0 left-0 right-0 p-6">
-                        <h3 className="text-xl font-semibold text-white">{image.title}</h3>
-                        <p className="text-orange-500">{image.category}</p>
+                      <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
+                        <h3 className="text-lg sm:text-xl font-semibold text-white">{image.title}</h3>
+                        <p className="text-orange-500 text-sm sm:text-base">{image.category}</p>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
 
               {/* View More Button */}
-              <div className="text-center mt-12">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
+                className="text-center mt-8 sm:mt-12"
+              >
                 <button
                   onClick={handleViewMoreClick}
-                  className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold text-base sm:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
                 >
                   <span>View More Photos</span>
-                  <ExternalLink className="w-6 h-6" />
+                  <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <p className="text-gray-400 text-sm mt-3">
                   Explore our complete photo collection on Google Photos
                 </p>
-              </div>
+              </motion.div>
             </>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-lg mb-8">
+              <p className="text-gray-400 text-base sm:text-lg mb-6 sm:mb-8">
                 {selectedCategory === 'All' 
                   ? 'No gallery items available yet.' 
                   : `No ${selectedCategory} events in gallery yet.`
@@ -212,10 +240,10 @@ export function GalleryAndProducts() {
               {/* Show View More button even when no local gallery items */}
               <button
                 onClick={handleViewMoreClick}
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold text-base sm:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
               >
                 <span>View Our Photo Collection</span>
-                <ExternalLink className="w-6 h-6" />
+                <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
               <p className="text-gray-400 text-sm mt-3">
                 Explore our complete photo collection on Google Photos
@@ -226,10 +254,10 @@ export function GalleryAndProducts() {
 
         {/* Lightbox */}
         {showLightbox && filteredImages.length > 0 && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
             <button
               onClick={() => setShowLightbox(false)}
-              className="absolute top-4 right-4 text-white text-xl p-2 hover:text-orange-500"
+              className="absolute top-4 right-4 text-white text-xl p-2 hover:text-orange-500 z-10"
             >
               ✕
             </button>
@@ -237,29 +265,29 @@ export function GalleryAndProducts() {
               <>
                 <button
                   onClick={handlePrevImage}
-                  className="absolute left-4 text-white p-2 hover:text-orange-500"
+                  className="absolute left-4 text-white p-2 hover:text-orange-500 z-10"
                 >
                   <ArrowLeft className="w-6 h-6" />
                 </button>
                 <button
                   onClick={handleNextImage}
-                  className="absolute right-4 text-white p-2 hover:text-orange-500"
+                  className="absolute right-4 text-white p-2 hover:text-orange-500 z-10"
                 >
                   <ArrowRight className="w-6 h-6" />
                 </button>
               </>
             )}
-            <div className="text-center">
+            <div className="text-center max-w-full max-h-full">
               <img
                 src={filteredImages[currentImageIndex].image_url}
                 alt={filteredImages[currentImageIndex].title}
                 className="max-h-[80vh] max-w-[90vw] object-contain"
               />
               <div className="mt-4">
-                <h3 className="text-xl font-semibold text-white">
+                <h3 className="text-lg sm:text-xl font-semibold text-white">
                   {filteredImages[currentImageIndex].title}
                 </h3>
-                <p className="text-orange-500">
+                <p className="text-orange-500 text-sm sm:text-base">
                   {filteredImages[currentImageIndex].category}
                 </p>
               </div>

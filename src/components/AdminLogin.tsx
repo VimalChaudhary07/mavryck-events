@@ -18,7 +18,7 @@ export function AdminLogin() {
     // Simulate network delay for better UX
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const isSuccessful = login(email, password);
+    const isSuccessful = await login(email, password);
     
     if (isSuccessful) {
       navigate('/admin/dashboard');
@@ -35,15 +35,15 @@ export function AdminLogin() {
         transition={{ duration: 0.5 }}
         className="max-w-md w-full"
       >
-        <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl p-8 shadow-xl border border-gray-700">
+        <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-700">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="flex justify-center mb-8"
+            className="flex justify-center mb-6 sm:mb-8"
           >
             <div className="p-4 bg-orange-500/10 rounded-full">
-              <Lock className="w-12 h-12 text-orange-500" />
+              <Lock className="w-10 h-10 sm:w-12 sm:h-12 text-orange-500" />
             </div>
           </motion.div>
 
@@ -51,12 +51,12 @@ export function AdminLogin() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="text-2xl font-bold text-white text-center mb-8"
+            className="text-xl sm:text-2xl font-bold text-white text-center mb-6 sm:mb-8"
           >
             Admin Login
           </motion.h2>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-6">
             <motion.div
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -71,7 +71,7 @@ export function AdminLogin() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200 text-sm sm:text-base"
                   placeholder="Enter your email"
                   required
                 />
@@ -92,7 +92,7 @@ export function AdminLogin() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200"
+                  className="w-full pl-10 pr-12 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all duration-200 text-sm sm:text-base"
                   placeholder="Enter your password"
                   required
                 />
@@ -116,10 +116,10 @@ export function AdminLogin() {
               transition={{ delay: 0.6 }}
               type="submit"
               disabled={isLoading}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group text-sm sm:text-base"
             >
               {isLoading ? (
-                <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 sm:w-6 sm:h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
                   <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

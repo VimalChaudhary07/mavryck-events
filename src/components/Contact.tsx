@@ -102,7 +102,7 @@ export function Contact() {
   };
 
   return (
-    <section id="contact" className="py-20 bg-black relative overflow-hidden">
+    <section id="contact" className="py-12 sm:py-16 lg:py-20 bg-black relative overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{
@@ -116,42 +116,42 @@ export function Contact() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          className="text-center mb-12 sm:mb-16"
         >
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">
             Get In <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">Touch</span>
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+          <p className="text-gray-400 max-w-2xl mx-auto text-base sm:text-lg">
             Ready to plan your next event? We'd love to hear from you. Get in touch and let's create something amazing together.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Contact Information */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="space-y-8"
+            className="space-y-6 sm:space-y-8"
           >
-            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700">
-              <h3 className="text-2xl font-bold text-white mb-6">Contact Information</h3>
+            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-gray-700">
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-6">Contact Information</h3>
               
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
                   className="flex items-start gap-4 p-4 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-all"
                 >
-                  <div className="bg-orange-500/20 p-3 rounded-lg">
-                    <Mail className="w-6 h-6 text-orange-500" />
+                  <div className="bg-orange-500/20 p-3 rounded-lg flex-shrink-0">
+                    <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                   </div>
-                  <div>
-                    <h4 className="text-lg font-semibold text-white mb-1">Email</h4>
-                    <a href="mailto:mr.gupta881@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-base sm:text-lg font-semibold text-white mb-1">Email</h4>
+                    <a href="mailto:mr.gupta881@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block text-sm sm:text-base break-all">
                       mr.gupta881@gmail.com
                     </a>
-                    <a href="mailto:mavryckevents@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block">
+                    <a href="mailto:mavryckevents@gmail.com" className="text-gray-400 hover:text-orange-500 transition-colors block text-sm sm:text-base break-all">
                       mavryckevents@gmail.com
                     </a>
                   </div>
@@ -161,12 +161,12 @@ export function Contact() {
                   whileHover={{ scale: 1.02 }}
                   className="flex items-start gap-4 p-4 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-all"
                 >
-                  <div className="bg-orange-500/20 p-3 rounded-lg">
-                    <Phone className="w-6 h-6 text-orange-500" />
+                  <div className="bg-orange-500/20 p-3 rounded-lg flex-shrink-0">
+                    <Phone className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-white mb-1">Phone</h4>
-                    <a href="tel:+917045712235" className="text-gray-400 hover:text-orange-500 transition-colors text-lg">
+                    <h4 className="text-base sm:text-lg font-semibold text-white mb-1">Phone</h4>
+                    <a href="tel:+917045712235" className="text-gray-400 hover:text-orange-500 transition-colors text-base sm:text-lg">
                       +91 7045712235
                     </a>
                   </div>
@@ -176,12 +176,12 @@ export function Contact() {
                   whileHover={{ scale: 1.02 }}
                   className="flex items-start gap-4 p-4 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-all"
                 >
-                  <div className="bg-orange-500/20 p-3 rounded-lg">
-                    <MapPin className="w-6 h-6 text-orange-500" />
+                  <div className="bg-orange-500/20 p-3 rounded-lg flex-shrink-0">
+                    <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-white mb-1">Location</h4>
-                    <p className="text-gray-400 leading-relaxed">
+                    <h4 className="text-base sm:text-lg font-semibold text-white mb-1">Location</h4>
+                    <p className="text-gray-400 leading-relaxed text-sm sm:text-base">
                       MAHALAXMI & CHINCHPOKLI, MUMBAI, MAHARASHTRA.<br />
                       PIN CODE - 400011.<br />
                       LANDMARK - MINARVA TOWER.
@@ -193,16 +193,16 @@ export function Contact() {
                   whileHover={{ scale: 1.02 }}
                   className="flex items-start gap-4 p-4 rounded-xl bg-gray-700/30 hover:bg-gray-700/50 transition-all"
                 >
-                  <div className="bg-orange-500/20 p-3 rounded-lg">
-                    <Instagram className="w-6 h-6 text-orange-500" />
+                  <div className="bg-orange-500/20 p-3 rounded-lg flex-shrink-0">
+                    <Instagram className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-white mb-1">Social Media</h4>
+                    <h4 className="text-base sm:text-lg font-semibold text-white mb-1">Social Media</h4>
                     <a 
                       href="https://www.instagram.com/mavryck_events" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-orange-500 transition-colors"
+                      className="text-gray-400 hover:text-orange-500 transition-colors text-sm sm:text-base"
                     >
                       @mavryck_events
                     </a>
@@ -219,8 +219,8 @@ export function Contact() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="bg-gradient-to-br from-orange-500/10 to-red-500/10 backdrop-blur-sm rounded-2xl p-6 border border-orange-500/20"
             >
-              <h4 className="text-lg font-semibold text-white mb-4">Business Hours</h4>
-              <div className="space-y-2 text-gray-300">
+              <h4 className="text-base sm:text-lg font-semibold text-white mb-4">Business Hours</h4>
+              <div className="space-y-2 text-gray-300 text-sm sm:text-base">
                 <div className="flex justify-between">
                   <span>Monday - Friday</span>
                   <span>9:00 AM - 7:00 PM</span>
@@ -243,11 +243,11 @@ export function Contact() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700"
+            className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-gray-700"
           >
-            <h3 className="text-2xl font-bold text-white mb-6">Send us a Message</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-white mb-6">Send us a Message</h3>
             
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
                   Your Name *
@@ -257,7 +257,7 @@ export function Contact() {
                   id="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 ${
+                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 text-sm sm:text-base ${
                     errors.name 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-gray-600 focus:ring-orange-500'
@@ -281,7 +281,7 @@ export function Contact() {
                   id="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 ${
+                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 text-sm sm:text-base ${
                     errors.email 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-gray-600 focus:ring-orange-500'
@@ -305,7 +305,7 @@ export function Contact() {
                   value={formData.message}
                   onChange={handleChange}
                   rows={5}
-                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 resize-none ${
+                  className={`w-full px-4 py-3 bg-gray-700/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 resize-none text-sm sm:text-base ${
                     errors.message 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-gray-600 focus:ring-orange-500'
@@ -325,7 +325,7 @@ export function Contact() {
                 disabled={isSubmitting}
                 whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
                 whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
-                className={`w-full py-4 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-3 text-lg ${
+                className={`w-full py-3 sm:py-4 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-3 text-base sm:text-lg ${
                   submitStatus === 'success'
                     ? 'bg-green-600 text-white'
                     : submitStatus === 'error'
@@ -335,22 +335,22 @@ export function Contact() {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader className="w-6 h-6 animate-spin" />
+                    <Loader className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
                     <span>Sending...</span>
                   </>
                 ) : submitStatus === 'success' ? (
                   <>
-                    <CheckCircle className="w-6 h-6" />
+                    <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                     <span>Message Sent!</span>
                   </>
                 ) : submitStatus === 'error' ? (
                   <>
-                    <AlertCircle className="w-6 h-6" />
+                    <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                     <span>Try Again</span>
                   </>
                 ) : (
                   <>
-                    <Send className="w-6 h-6" />
+                    <Send className="w-5 h-5 sm:w-6 sm:h-6" />
                     <span>Send Message</span>
                   </>
                 )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar, Gift, Heart, Building2, Music, Star, Award, PartyPopper, MapPin, Paintbrush, HeartHandshake, Home, Users } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const services = [
   {
@@ -78,27 +79,38 @@ const services = [
 
 export function Services() {
   return (
-    <section id="services" className="py-20 bg-gray-900">
+    <section id="services" className="py-12 sm:py-16 lg:py-20 bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-white mb-4">Our Services</h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12 sm:mb-16"
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Our Services</h2>
+          <p className="text-gray-400 max-w-2xl mx-auto text-base sm:text-lg">
             Comprehensive event management solutions for every occasion
           </p>
-        </div>
+        </motion.div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {services.map((service) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
+          {services.map((service, index) => {
             const IconComponent = service.icon;
             return (
-              <div
+              <motion.div
                 key={service.id}
-                className="bg-gray-800 rounded-xl p-6 hover:transform hover:scale-105 transition-all duration-300"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ scale: 1.05, y: -5 }}
+                className="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 transition-all duration-300 border border-gray-700 hover:border-orange-500/50"
               >
-                <IconComponent className="h-12 w-12 text-orange-500 mb-4" />
-                <h3 className="text-xl font-semibold text-white mb-2">{service.name}</h3>
-                <p className="text-gray-400">{service.description}</p>
-              </div>
+                <IconComponent className="h-10 w-10 sm:h-12 sm:w-12 text-orange-500 mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">{service.name}</h3>
+                <p className="text-gray-400 text-sm sm:text-base leading-relaxed">{service.description}</p>
+              </motion.div>
             );
           })}
         </div>
