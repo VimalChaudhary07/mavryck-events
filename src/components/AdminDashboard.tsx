@@ -1,431 +1,278 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Settings, Calendar, MessageSquare, Image, Package, Star, Edit, Eye, Phone, Mail, Download, Filter, Search, Archive, MoreVertical, Plus, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { 
+  Calendar, 
+  MessageSquare, 
+  Image, 
+  Package, 
+  Star, 
+  Users, 
+  TrendingUp, 
+  Eye,
+  EyeOff,
+  Edit,
+  Trash2,
+  Plus,
+  Download,
+  Settings,
+  Shield,
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Filter,
+  Search,
+  RefreshCw
+} from 'lucide-react';
 import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
 import { 
   getEventRequests, 
   getContactMessages, 
   getGalleryItems, 
   getProducts, 
   getTestimonials,
+  updateEventRequest,
+  updateContactMessage,
   deleteEventRequest,
   deleteContactMessage,
   deleteGalleryItem,
   deleteProduct,
-  deleteTestimonial,
-  updateEventRequest,
-  updateContactMessage,
-  testDatabaseConnection
+  deleteTestimonial
 } from '../lib/database';
-import { getCurrentSession, refreshSession } from '../lib/auth';
-import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
-import { AddItemModal } from './AddItemModal';
-import { EditItemModal } from './EditItemModal';
+import { getLoginAttemptStats, startActivityMonitoring } from '../lib/auth';
 import { EventDetailsModal } from './EventDetailsModal';
 import { MessageDetailsModal } from './MessageDetailsModal';
-import { AdminSettings } from './AdminSettings';
+import { AddItemModal } from './AddItemModal';
+import { EditItemModal } from './EditItemModal';
 import { ExportModal } from './ExportModal';
-import * as XLSX from 'xlsx';
+import { AdminSettings } from './AdminSettings';
+import toast from 'react-hot-toast';
+import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
+
+type TabType = 'overview' | 'events' | 'messages' | 'gallery' | 'products' | 'testimonials' | 'settings' | 'security';
+
+interface SecurityStats {
+  totalAttempts: number;
+  failedAttempts: number;
+  successfulAttempts: number;
+  isLocked: boolean;
+}
 
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('events');
-  const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'pending' | 'ongoing' | 'completed'>('all');
-  const [messageFilter, setMessageFilter] = useState<'all' | 'new' | 'viewed'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [events, setEvents] = useState<EventRequest[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
-  const [isMessageDetailsOpen, setIsMessageDetailsOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [addModalType, setAddModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
-  const [editModalType, setEditModalType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<EventRequest | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
-  const [refreshing, setRefreshing] = useState(false);
-  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [editType, setEditType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
+  const [addType, setAddType] = useState<'gallery' | 'product' | 'testimonial'>('gallery');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'ongoing' | 'completed'>('all');
+  const [viewedFilter, setViewedFilter] = useState<'all' | 'viewed' | 'new'>('all');
+  const [securityStats, setSecurityStats] = useState<SecurityStats>({
+    totalAttempts: 0,
+    failedAttempts: 0,
+    successfulAttempts: 0,
+    isLocked: false
+  });
 
   useEffect(() => {
-    initializeDashboard();
+    loadData();
+    startActivityMonitoring();
+    updateSecurityStats();
+    
+    // Update security stats every 30 seconds
+    const interval = setInterval(updateSecurityStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const initializeDashboard = async () => {
-    try {
-      setAuthStatus('checking');
-      setConnectionStatus('checking');
-      
-      // Check authentication status
-      const session = await getCurrentSession();
-      if (session && session.user?.email === 'admin@mavryck_events') {
-        setAuthStatus('authenticated');
-        console.log('Admin authenticated successfully');
-      } else {
-        // Try to refresh session
-        const refreshed = await refreshSession();
-        if (refreshed) {
-          setAuthStatus('authenticated');
-          console.log('Session refreshed successfully');
-        } else {
-          setAuthStatus('unauthenticated');
-          toast.error('Authentication required. Please log in again.');
-          return;
-        }
-      }
-      
-      // Test database connection
-      const isConnected = await testDatabaseConnection();
-      if (isConnected) {
-        setConnectionStatus('connected');
-        await loadData();
-      } else {
-        setConnectionStatus('disconnected');
-        toast.error('Database connection failed. Please check your connection.');
-      }
-    } catch (error) {
-      console.error('Dashboard initialization failed:', error);
-      setConnectionStatus('disconnected');
-      setAuthStatus('unauthenticated');
-      toast.error('Failed to initialize dashboard');
-    }
+  const updateSecurityStats = () => {
+    const stats = getLoginAttemptStats();
+    setSecurityStats(stats);
   };
 
   const loadData = async () => {
     try {
       setLoading(true);
-      console.log('Loading dashboard data...');
-      
       const [eventsData, messagesData, galleryData, productsData, testimonialsData] = await Promise.all([
-        getEventRequests().catch(err => {
-          console.error('Failed to load events:', err);
-          return [];
-        }),
-        getContactMessages().catch(err => {
-          console.error('Failed to load messages:', err);
-          return [];
-        }),
-        getGalleryItems().catch(err => {
-          console.error('Failed to load gallery:', err);
-          return [];
-        }),
-        getProducts().catch(err => {
-          console.error('Failed to load products:', err);
-          return [];
-        }),
-        getTestimonials().catch(err => {
-          console.error('Failed to load testimonials:', err);
-          return [];
-        })
+        getEventRequests(),
+        getContactMessages(),
+        getGalleryItems(),
+        getProducts(),
+        getTestimonials()
       ]);
       
       setEvents(eventsData || []);
       setMessages(messagesData || []);
-      setGalleryItems(galleryData || []);
+      setGallery(galleryData || []);
       setProducts(productsData || []);
       setTestimonials(testimonialsData || []);
-      
-      console.log('Dashboard data loaded successfully:', {
-        events: eventsData?.length || 0,
-        messages: messagesData?.length || 0,
-        gallery: galleryData?.length || 0,
-        products: productsData?.length || 0,
-        testimonials: testimonialsData?.length || 0
-      });
     } catch (error) {
       console.error('Failed to load data:', error);
-      toast.error('Failed to load dashboard data. Please check your authentication.');
+      toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await initializeDashboard();
-    setRefreshing(false);
-    toast.success('Data refreshed successfully');
-  };
-
-  // Bulk delete functionality
-  const handleBulkDelete = async (type: 'events' | 'messages') => {
-    if (selectedItems.length === 0) {
-      toast.error('No items selected');
-      return;
-    }
-
-    const confirmMessage = `Are you sure you want to delete ${selectedItems.length} ${type}? This action cannot be undone.`;
-    if (!window.confirm(confirmMessage)) return;
-
+  const handleStatusChange = async (eventId: string, newStatus: 'pending' | 'ongoing' | 'completed') => {
     try {
-      const deletePromises = selectedItems.map(id => 
-        type === 'events' ? deleteEventRequest(id) : deleteContactMessage(id)
-      );
-      
-      await Promise.all(deletePromises);
-      toast.success(`${selectedItems.length} ${type} deleted successfully`);
-      setSelectedItems([]);
-      loadData();
+      await updateEventRequest(eventId, { status: newStatus });
+      setEvents(prev => prev.map(event => 
+        event.id === eventId ? { ...event, status: newStatus } : event
+      ));
+      toast.success('Event status updated successfully');
     } catch (error) {
-      console.error(`Failed to delete ${type}:`, error);
-      toast.error(`Failed to delete ${type}. Please check your authentication.`);
+      console.error('Failed to update event status:', error);
+      toast.error('Failed to update event status');
     }
   };
 
-  // Quick export functionality
-  const handleQuickExport = (type: 'events' | 'messages') => {
+  const handleMarkAsViewed = async (messageId: string) => {
     try {
-      const data = type === 'events' ? filteredEvents : filteredMessages;
-      
-      if (data.length === 0) {
-        toast.error(`No ${type} to export`);
-        return;
-      }
-
-      const workbook = XLSX.utils.book_new();
-      
-      if (type === 'events') {
-        const eventsData = data.map(event => ({
-          ID: event.id,
-          Name: event.name,
-          Email: event.email,
-          Phone: event.phone,
-          'Event Type': event.event_type,
-          'Event Date': new Date(event.event_date).toLocaleDateString(),
-          'Guest Count': event.guest_count,
-          Requirements: event.requirements,
-          Status: event.status,
-          'Created At': new Date(event.created_at).toLocaleString()
-        }));
-        
-        const worksheet = XLSX.utils.json_to_sheet(eventsData);
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Event Requests');
-      } else {
-        const messagesData = data.map(message => ({
-          ID: message.id,
-          Name: message.name,
-          Email: message.email,
-          Message: message.message,
-          Viewed: message.viewed ? 'Yes' : 'No',
-          'Created At': new Date(message.created_at).toLocaleString()
-        }));
-        
-        const worksheet = XLSX.utils.json_to_sheet(messagesData);
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Contact Messages');
-      }
-
-      const filename = `${type}-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(workbook, filename);
-      toast.success(`${type} exported successfully`);
+      await updateContactMessage(messageId, { viewed: true });
+      setMessages(prev => prev.map(message => 
+        message.id === messageId ? { ...message, viewed: true } : message
+      ));
+      toast.success('Message marked as viewed');
     } catch (error) {
-      console.error(`Failed to export ${type}:`, error);
-      toast.error(`Failed to export ${type}`);
+      console.error('Failed to mark message as viewed:', error);
+      toast.error('Failed to mark message as viewed');
     }
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this event request?')) return;
     
     try {
       await deleteEventRequest(eventId);
-      toast.success('Event deleted successfully');
-      loadData();
+      setEvents(prev => prev.filter(event => event.id !== eventId));
+      toast.success('Event request deleted successfully');
     } catch (error) {
       console.error('Failed to delete event:', error);
-      toast.error('Failed to delete event. Please check your authentication.');
+      toast.error('Failed to delete event request');
     }
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!window.confirm('Are you sure you want to delete this message? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this message?')) return;
     
     try {
       await deleteContactMessage(messageId);
+      setMessages(prev => prev.filter(message => message.id !== messageId));
       toast.success('Message deleted successfully');
-      loadData();
     } catch (error) {
       console.error('Failed to delete message:', error);
-      toast.error('Failed to delete message. Please check your authentication.');
+      toast.error('Failed to delete message');
     }
   };
 
   const handleDeleteGalleryItem = async (itemId: string) => {
-    if (!window.confirm('Are you sure you want to delete this gallery item? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this gallery item?')) return;
     
     try {
       await deleteGalleryItem(itemId);
+      setGallery(prev => prev.filter(item => item.id !== itemId));
       toast.success('Gallery item deleted successfully');
-      loadData();
     } catch (error) {
       console.error('Failed to delete gallery item:', error);
-      toast.error('Failed to delete gallery item. Please check your authentication.');
+      toast.error('Failed to delete gallery item');
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this product?')) return;
     
     try {
       await deleteProduct(productId);
+      setProducts(prev => prev.filter(product => product.id !== productId));
       toast.success('Product deleted successfully');
-      loadData();
     } catch (error) {
       console.error('Failed to delete product:', error);
-      toast.error('Failed to delete product. Please check your authentication.');
+      toast.error('Failed to delete product');
     }
   };
 
   const handleDeleteTestimonial = async (testimonialId: string) => {
-    if (!window.confirm('Are you sure you want to delete this testimonial? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this testimonial?')) return;
     
     try {
       await deleteTestimonial(testimonialId);
+      setTestimonials(prev => prev.filter(testimonial => testimonial.id !== testimonialId));
       toast.success('Testimonial deleted successfully');
-      loadData();
     } catch (error) {
       console.error('Failed to delete testimonial:', error);
-      toast.error('Failed to delete testimonial. Please check your authentication.');
+      toast.error('Failed to delete testimonial');
     }
   };
 
-  const handleEventStatusChange = async (eventId: string, newStatus: 'pending' | 'ongoing' | 'completed') => {
-    try {
-      const event = events.find(e => e.id === eventId);
-      if (event) {
-        await updateEventRequest(eventId, { status: newStatus });
-        toast.success('Event status updated successfully');
-        loadData();
-        setSelectedEvent(prev => prev ? { ...prev, status: newStatus } : null);
-      }
-    } catch (error) {
-      console.error('Failed to update event status:', error);
-      toast.error('Failed to update event status. Please check your authentication.');
-    }
+  const handleEdit = (item: any, type: 'gallery' | 'product' | 'testimonial') => {
+    setEditItem(item);
+    setEditType(type);
+    setShowEditModal(true);
   };
 
-  const handleMarkMessageAsViewed = async (messageId: string) => {
-    try {
-      const message = messages.find(m => m.id === messageId);
-      if (message) {
-        await updateContactMessage(messageId, { viewed: true });
-        toast.success('Message marked as viewed');
-        loadData();
-        setSelectedMessage(prev => prev ? { ...prev, viewed: true } : null);
-      }
-    } catch (error) {
-      console.error('Failed to mark message as viewed:', error);
-      toast.error('Failed to update message status. Please check your authentication.');
-    }
+  const handleAdd = (type: 'gallery' | 'product' | 'testimonial') => {
+    setAddType(type);
+    setShowAddModal(true);
   };
 
-  const handleAddModalOpen = (type: 'gallery' | 'product' | 'testimonial') => {
-    setAddModalType(type);
-    setIsAddModalOpen(true);
-  };
-
-  const handleEditModalOpen = (type: 'gallery' | 'product' | 'testimonial', item: any) => {
-    setEditModalType(type);
-    setEditingItem(item);
-    setIsEditModalOpen(true);
-  };
-
-  const handleEventClick = (event: EventRequest) => {
-    setSelectedEvent(event);
-    setIsEventDetailsOpen(true);
-  };
-
-  const handleMessageClick = (message: ContactMessage) => {
-    setSelectedMessage(message);
-    setIsMessageDetailsOpen(true);
-  };
-
-  // Helper function to ensure valid rating for star rendering
-  const getValidRating = (rating: number): number => {
-    return Math.max(1, Math.min(5, Math.floor(rating) || 1));
-  };
-
-  // Filter and search functionality
   const filteredEvents = events.filter(event => {
-    const matchesStatus = eventStatusFilter === 'all' || event.status === eventStatusFilter;
-    const matchesSearch = searchTerm === '' || 
-      event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.event_type.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesStatus && matchesSearch;
+    const matchesSearch = event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         event.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         event.event_type.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   const filteredMessages = messages.filter(message => {
-    const matchesFilter = messageFilter === 'all' || 
-      (messageFilter === 'new' && !message.viewed) ||
-      (messageFilter === 'viewed' && message.viewed);
-    const matchesSearch = searchTerm === '' ||
-      message.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      message.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      message.message.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    const matchesSearch = message.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         message.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         message.message.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesViewed = viewedFilter === 'all' || 
+                         (viewedFilter === 'viewed' && message.viewed) ||
+                         (viewedFilter === 'new' && !message.viewed);
+    return matchesSearch && matchesViewed;
   });
 
-  // Count events by status
-  const eventCounts = {
-    pending: events.filter(e => e.status === 'pending').length,
-    ongoing: events.filter(e => e.status === 'ongoing').length,
-    completed: events.filter(e => e.status === 'completed').length,
+  const stats = {
+    totalEvents: events.length,
+    pendingEvents: events.filter(e => e.status === 'pending').length,
+    ongoingEvents: events.filter(e => e.status === 'ongoing').length,
+    completedEvents: events.filter(e => e.status === 'completed').length,
+    totalMessages: messages.length,
+    newMessages: messages.filter(m => !m.viewed).length,
+    galleryItems: gallery.length,
+    products: products.length,
+    testimonials: testimonials.length
   };
 
-  // Count messages by status
-  const messageCounts = {
-    new: messages.filter(m => !m.viewed).length,
-    viewed: messages.filter(m => m.viewed).length,
-  };
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: TrendingUp },
+    { id: 'events', label: 'Events', icon: Calendar, badge: stats.pendingEvents },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: stats.newMessages },
+    { id: 'gallery', label: 'Gallery', icon: Image },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'testimonials', label: 'Testimonials', icon: Star },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'text-yellow-400 bg-yellow-400/10';
-      case 'ongoing': return 'text-blue-400 bg-blue-400/10';
-      case 'completed': return 'text-green-400 bg-green-400/10';
-      default: return 'text-gray-400 bg-gray-400/10';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending': return 'New Request';
-      case 'ongoing': return 'Ongoing';
-      case 'completed': return 'Completed';
-      default: return status;
-    }
-  };
-
-  if (loading && (connectionStatus === 'checking' || authStatus === 'checking')) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (authStatus === 'unauthenticated') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Authentication Required</h2>
-          <p className="text-gray-400 mb-6">Please log in to access the admin dashboard.</p>
-          <button
-            onClick={() => window.location.href = '/admin'}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            Go to Login
-          </button>
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -433,714 +280,642 @@ export function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Header with Connection Status */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Dashboard</h1>
+      {/* Header */}
+      <div className="bg-gray-800 border-b border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <Shield className="w-8 h-8 text-orange-500" />
+              <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
+            </div>
             <div className="flex items-center gap-4">
-              {/* Auth Status */}
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
-                authStatus === 'authenticated' 
-                  ? 'bg-green-500/10 text-green-400' 
-                  : 'bg-red-500/10 text-red-400'
-              }`}>
-                {authStatus === 'authenticated' ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : (
-                  <AlertCircle className="w-4 h-4" />
-                )}
-                <span className="capitalize">{authStatus}</span>
-              </div>
-              
-              {/* Connection Status */}
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
-                connectionStatus === 'connected' 
-                  ? 'bg-green-500/10 text-green-400' 
-                  : connectionStatus === 'disconnected'
-                  ? 'bg-red-500/10 text-red-400'
-                  : 'bg-yellow-500/10 text-yellow-400'
-              }`}>
-                {connectionStatus === 'connected' ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : connectionStatus === 'disconnected' ? (
-                  <AlertCircle className="w-4 h-4" />
-                ) : (
-                  <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                )}
-                <span className="capitalize">{connectionStatus}</span>
-              </div>
-              
-              {/* Refresh Button */}
               <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                onClick={loadData}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
               >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Refresh</span>
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Export
               </button>
             </div>
           </div>
-          <p className="text-gray-400">Manage your events, messages, and content</p>
         </div>
+      </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex gap-8">
           {/* Sidebar */}
-          <div className="w-full lg:w-64 space-y-2">
-            <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-              <h3 className="text-white font-semibold mb-3">Navigation</h3>
-              <button
-                onClick={() => setActiveTab('events')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                  activeTab === 'events'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <Calendar className="w-5 h-5" />
-                <span>Events ({events.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('messages')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                  activeTab === 'messages'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <MessageSquare className="w-5 h-5" />
-                <span>Messages ({messages.length})</span>
-                {messageCounts.new > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-auto">
-                    {messageCounts.new}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('gallery')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                  activeTab === 'gallery'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <Image className="w-5 h-5" />
-                <span>Gallery ({galleryItems.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('products')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                  activeTab === 'products'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <Package className="w-5 h-5" />
-                <span>Products ({products.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('testimonials')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${
-                  activeTab === 'testimonials'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <Star className="w-5 h-5" />
-                <span>Testimonials ({testimonials.length})</span>
-              </button>
-            </div>
-
-            <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-              <h3 className="text-white font-semibold mb-3">Quick Actions</h3>
-              <button
-                onClick={() => handleAddModalOpen('gallery')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Gallery Item</span>
-              </button>
-              <button
-                onClick={() => handleAddModalOpen('product')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Product</span>
-              </button>
-              <button
-                onClick={() => handleAddModalOpen('testimonial')}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 text-left"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Testimonial</span>
-              </button>
-            </div>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                activeTab === 'settings'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-              <span>Settings</span>
-            </button>
+          <div className="w-64 flex-shrink-0">
+            <nav className="space-y-2">
+              {tabs.map((tab) => {
+                const IconComponent = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as TabType)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-orange-500 text-white'
+                        : 'text-gray-300 hover:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <IconComponent className="w-5 h-5" />
+                      {tab.label}
+                    </div>
+                    {tab.badge && tab.badge > 0 && (
+                      <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
           {/* Main Content */}
           <div className="flex-1">
-            {activeTab === 'events' && (
-              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-                  <h2 className="text-xl font-semibold text-white">Event Requests</h2>
+            {activeTab === 'overview' && (
+              <div className="space-y-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-6">Dashboard Overview</h2>
                   
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-800 rounded-xl p-6"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-400 text-sm">Total Events</p>
+                          <p className="text-2xl font-bold text-white">{stats.totalEvents}</p>
+                        </div>
+                        <Calendar className="w-8 h-8 text-orange-500" />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                      className="bg-gray-800 rounded-xl p-6"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-400 text-sm">Pending Events</p>
+                          <p className="text-2xl font-bold text-yellow-400">{stats.pendingEvents}</p>
+                        </div>
+                        <Clock className="w-8 h-8 text-yellow-500" />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="bg-gray-800 rounded-xl p-6"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-400 text-sm">New Messages</p>
+                          <p className="text-2xl font-bold text-blue-400">{stats.newMessages}</p>
+                        </div>
+                        <MessageSquare className="w-8 h-8 text-blue-500" />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="bg-gray-800 rounded-xl p-6"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-gray-400 text-sm">Gallery Items</p>
+                          <p className="text-2xl font-bold text-green-400">{stats.galleryItems}</p>
+                        </div>
+                        <Image className="w-8 h-8 text-green-500" />
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="bg-gray-800 rounded-xl p-6">
+                      <h3 className="text-lg font-semibold text-white mb-4">Recent Events</h3>
+                      <div className="space-y-4">
+                        {events.slice(0, 5).map((event) => (
+                          <div key={event.id} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                            <div>
+                              <p className="text-white font-medium">{event.name}</p>
+                              <p className="text-gray-400 text-sm">{event.event_type}</p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              event.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                              event.status === 'ongoing' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-green-500/20 text-green-400'
+                            }`}>
+                              {event.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-800 rounded-xl p-6">
+                      <h3 className="text-lg font-semibold text-white mb-4">Recent Messages</h3>
+                      <div className="space-y-4">
+                        {messages.slice(0, 5).map((message) => (
+                          <div key={message.id} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                            <div>
+                              <p className="text-white font-medium">{message.name}</p>
+                              <p className="text-gray-400 text-sm truncate">{message.message.substring(0, 50)}...</p>
+                            </div>
+                            {!message.viewed && (
+                              <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'events' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Event Requests</h2>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-5 h-5 text-gray-400" />
                       <input
                         type="text"
                         placeholder="Search events..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-auto"
+                        className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleQuickExport('events')}
-                        className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span className="hidden sm:inline">Export</span>
-                      </button>
-                      
-                      {selectedItems.length > 0 && (
-                        <button
-                          onClick={() => handleBulkDelete('events')}
-                          className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="hidden sm:inline">Delete ({selectedItems.length})</span>
-                          <span className="sm:hidden">({selectedItems.length})</span>
-                        </button>
-                      )}
-                    </div>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="ongoing">Ongoing</option>
+                      <option value="completed">Completed</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Status Filter Buttons */}
-                <div className="flex gap-2 mb-6 flex-wrap">
-                  <button
-                    onClick={() => setEventStatusFilter('all')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      eventStatusFilter === 'all'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    All ({events.length})
-                  </button>
-                  <button
-                    onClick={() => setEventStatusFilter('pending')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      eventStatusFilter === 'pending'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    New ({eventCounts.pending})
-                  </button>
-                  <button
-                    onClick={() => setEventStatusFilter('ongoing')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      eventStatusFilter === 'ongoing'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    Ongoing ({eventCounts.ongoing})
-                  </button>
-                  <button
-                    onClick={() => setEventStatusFilter('completed')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      eventStatusFilter === 'completed'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    Completed ({eventCounts.completed})
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {filteredEvents.map((event) => (
-                    <motion.div
-                      key={event.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.includes(event.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedItems(prev => [...prev, event.id]);
-                              } else {
-                                setSelectedItems(prev => prev.filter(id => id !== event.id));
-                              }
-                            }}
-                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500 flex-shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
-                              <h3 className="text-lg font-medium text-white truncate">{event.name}</h3>
-                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                                {getStatusLabel(event.status)}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-sm">
-                              <div className="truncate">
-                                <span className="text-gray-400">Email: </span>
-                                <span className="text-gray-300">{event.email}</span>
-                              </div>
+                <div className="bg-gray-800 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Client</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Event</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-700">
+                        {filteredEvents.map((event) => (
+                          <tr key={event.id} className="hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <div>
-                                <span className="text-gray-400">Phone: </span>
-                                <span className="text-gray-300">{event.phone}</span>
+                                <div className="text-sm font-medium text-white">{event.name}</div>
+                                <div className="text-sm text-gray-400">{event.email}</div>
                               </div>
-                              <div>
-                                <span className="text-gray-400">Event: </span>
-                                <span className="text-orange-500 capitalize">{event.event_type}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-white">{event.event_type}</div>
+                              <div className="text-sm text-gray-400">{event.guest_count} guests</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {new Date(event.event_date).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                event.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                event.status === 'ongoing' ? 'bg-blue-500/20 text-blue-400' :
+                                'bg-green-500/20 text-green-400'
+                              }`}>
+                                {event.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedEvent(event);
+                                    setShowEventModal(true);
+                                  }}
+                                  className="text-orange-500 hover:text-orange-400"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEvent(event.id)}
+                                  className="text-red-500 hover:text-red-400"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
-                          <button
-                            onClick={() => handleEventClick(event)}
-                            className="text-blue-500 hover:text-blue-400 p-2"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                          <a
-                            href={`tel:${event.phone}`}
-                            className="text-green-500 hover:text-green-400 p-2"
-                            title="Call"
-                          >
-                            <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </a>
-                          <a
-                            href={`mailto:${event.email}`}
-                            className="text-orange-500 hover:text-orange-400 p-2"
-                            title="Email"
-                          >
-                            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </a>
-                          <button
-                            onClick={() => handleDeleteEvent(event.id)}
-                            className="text-red-500 hover:text-red-400 p-2"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {filteredEvents.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">
-                      No {eventStatusFilter === 'all' ? '' : eventStatusFilter} events found.
-                    </p>
-                  )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'messages' && (
-              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-                  <h2 className="text-xl font-semibold text-white">Contact Messages</h2>
-                  
-                  {/* Search and Actions */}
-                  <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Contact Messages</h2>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-5 h-5 text-gray-400" />
                       <input
                         type="text"
                         placeholder="Search messages..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full sm:w-auto"
+                        className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleQuickExport('messages')}
-                        className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span className="hidden sm:inline">Export</span>
-                      </button>
-                      
-                      {selectedItems.length > 0 && (
-                        <button
-                          onClick={() => handleBulkDelete('messages')}
-                          className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="hidden sm:inline">Delete ({selectedItems.length})</span>
-                          <span className="sm:hidden">({selectedItems.length})</span>
-                        </button>
-                      )}
-                    </div>
+                    <select
+                      value={viewedFilter}
+                      onChange={(e) => setViewedFilter(e.target.value as any)}
+                      className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="all">All Messages</option>
+                      <option value="new">New Only</option>
+                      <option value="viewed">Viewed Only</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Message Filter Buttons */}
-                <div className="flex gap-2 mb-6 flex-wrap">
-                  <button
-                    onClick={() => setMessageFilter('all')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      messageFilter === 'all'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    All ({messages.length})
-                  </button>
-                  <button
-                    onClick={() => setMessageFilter('new')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      messageFilter === 'new'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    New ({messageCounts.new})
-                    {messageCounts.new > 0 && (
-                      <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                        {messageCounts.new}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setMessageFilter('viewed')}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      messageFilter === 'viewed'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    Viewed ({messageCounts.viewed})
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {filteredMessages.map((message) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600/50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.includes(message.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedItems(prev => [...prev, message.id]);
-                              } else {
-                                setSelectedItems(prev => prev.filter(id => id !== message.id));
-                              }
-                            }}
-                            className="mt-1 w-4 h-4 text-orange-500 bg-gray-600 border-gray-500 rounded focus:ring-orange-500 flex-shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
-                              <h3 className="text-lg font-medium text-white truncate">{message.name}</h3>
-                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                message.viewed 
-                                  ? 'text-green-400 bg-green-400/10' 
-                                  : 'text-yellow-400 bg-yellow-400/10'
+                <div className="bg-gray-800 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Sender</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Message</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-700">
+                        {filteredMessages.map((message) => (
+                          <tr key={message.id} className="hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-white">{message.name}</div>
+                                <div className="text-sm text-gray-400">{message.email}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-white truncate max-w-xs">
+                                {message.message.substring(0, 100)}...
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {new Date(message.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                message.viewed ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
                               }`}>
                                 {message.viewed ? 'Viewed' : 'New'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedMessage(message);
+                                    setShowMessageModal(true);
+                                  }}
+                                  className="text-orange-500 hover:text-orange-400"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMessage(message.id)}
+                                  className="text-red-500 hover:text-red-400"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
-                            </div>
-                            <p className="text-gray-400 mb-2 text-sm truncate">{message.email}</p>
-                            <p className="text-gray-300 text-sm line-clamp-2">
-                              {message.message.length > 100 
-                                ? `${message.message.substring(0, 100)}...` 
-                                : message.message
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
-                          <button
-                            onClick={() => handleMessageClick(message)}
-                            className="text-blue-500 hover:text-blue-400 p-2"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                          <a
-                            href={`mailto:${message.email}`}
-                            className="text-orange-500 hover:text-orange-400 p-2"
-                            title="Reply"
-                          >
-                            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </a>
-                          <button
-                            onClick={() => handleDeleteMessage(message.id)}
-                            className="text-red-500 hover:text-red-400 p-2"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {filteredMessages.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">
-                      No {messageFilter === 'all' ? '' : messageFilter} messages found.
-                    </p>
-                  )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'gallery' && (
-              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">Gallery Items</h2>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Gallery Management</h2>
                   <button
-                    onClick={() => handleAddModalOpen('gallery')}
+                    onClick={() => handleAdd('gallery')}
                     className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Add Item</span>
+                    Add Gallery Item
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {galleryItems.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg overflow-hidden"
-                    >
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {gallery.map((item) => (
+                    <div key={item.id} className="bg-gray-800 rounded-xl overflow-hidden">
                       <img
                         src={item.image_url}
                         alt={item.title}
                         className="w-full h-48 object-cover"
                       />
                       <div className="p-4">
-                        <h3 className="text-white font-medium truncate">{item.title}</h3>
-                        <p className="text-orange-500 text-sm">{item.category}</p>
-                        {item.description && (
-                          <p className="text-gray-400 text-sm mt-2 line-clamp-2">{item.description}</p>
-                        )}
-                        <div className="flex gap-2 mt-2">
+                        <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                        <p className="text-gray-400 text-sm mb-2">{item.category}</p>
+                        <p className="text-gray-300 text-sm mb-4">{item.description}</p>
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleEditModalOpen('gallery', item)}
-                            className="text-blue-500 hover:text-blue-400"
+                            onClick={() => handleEdit(item, 'gallery')}
+                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-3 h-3" />
+                            Edit
                           </button>
                           <button
                             onClick={() => handleDeleteGalleryItem(item.id)}
-                            className="text-red-500 hover:text-red-400"
+                            className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
+                            Delete
                           </button>
                         </div>
                       </div>
-                    </motion.div>
-                  ))}
-                  {galleryItems.length === 0 && (
-                    <div className="col-span-full text-gray-400 text-center py-8">
-                      No gallery items yet.
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
 
             {activeTab === 'products' && (
-              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">Products</h2>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Products Management</h2>
                   <button
-                    onClick={() => handleAddModalOpen('product')}
+                    onClick={() => handleAdd('product')}
                     className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Add Product</span>
+                    Add Product
                   </button>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {products.map((product) => (
-                    <motion.div
-                      key={product.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg overflow-hidden"
-                    >
+                    <div key={product.id} className="bg-gray-800 rounded-xl overflow-hidden">
                       <img
                         src={product.image_url}
                         alt={product.name}
                         className="w-full h-48 object-cover"
                       />
                       <div className="p-4">
-                        <h3 className="text-white font-medium truncate">{product.name}</h3>
-                        <p className="text-orange-500 font-bold">{product.price}</p>
-                        <p className="text-gray-400 text-sm mt-2 line-clamp-2">{product.description}</p>
-                        <div className="flex gap-2 mt-2">
+                        <h3 className="text-lg font-semibold text-white mb-2">{product.name}</h3>
+                        <p className="text-orange-500 font-bold text-lg mb-2">{product.price}</p>
+                        <p className="text-gray-300 text-sm mb-4">{product.description}</p>
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleEditModalOpen('product', product)}
-                            className="text-blue-500 hover:text-blue-400"
+                            onClick={() => handleEdit(product, 'product')}
+                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-3 h-3" />
+                            Edit
                           </button>
                           <button
                             onClick={() => handleDeleteProduct(product.id)}
-                            className="text-red-500 hover:text-red-400"
+                            className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
+                            Delete
                           </button>
                         </div>
                       </div>
-                    </motion.div>
-                  ))}
-                  {products.length === 0 && (
-                    <div className="col-span-full text-gray-400 text-center py-8">
-                      No products yet.
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
 
             {activeTab === 'testimonials' && (
-              <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-white">Testimonials</h2>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Testimonials Management</h2>
                   <button
-                    onClick={() => handleAddModalOpen('testimonial')}
+                    onClick={() => handleAdd('testimonial')}
                     className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Add Testimonial</span>
+                    Add Testimonial
                   </button>
                 </div>
-                <div className="space-y-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {testimonials.map((testimonial) => (
-                    <motion.div
-                      key={testimonial.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-700 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex gap-4 flex-1">
-                          <img
-                            src={testimonial.avatar_url}
-                            alt={testimonial.name}
-                            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-white font-medium">{testimonial.name}</h3>
-                            <p className="text-orange-500 text-sm">{testimonial.role}</p>
-                            <div className="flex items-center gap-1 mt-1">
-                              {[...Array(getValidRating(testimonial.rating))].map((_, i) => (
-                                <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                              ))}
-                            </div>
-                            <p className="text-gray-400 text-sm mt-2 line-clamp-3">{testimonial.content}</p>
-                          </div>
+                    <div key={testimonial.id} className="bg-gray-800 rounded-xl p-6">
+                      <div className="flex items-center gap-4 mb-4">
+                        <img
+                          src={testimonial.avatar_url}
+                          alt={testimonial.name}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{testimonial.name}</h3>
+                          <p className="text-gray-400 text-sm">{testimonial.role}</p>
                         </div>
-                        <div className="flex gap-2 ml-4 flex-shrink-0">
+                      </div>
+                      <p className="text-gray-300 text-sm mb-4">{testimonial.content}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {[...Array(testimonial.rating)].map((_, i) => (
+                            <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleEditModalOpen('testimonial', testimonial)}
-                            className="text-blue-500 hover:text-blue-400 p-2"
+                            onClick={() => handleEdit(testimonial, 'testimonial')}
+                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
                           >
-                            <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <Edit className="w-3 h-3" />
+                            Edit
                           </button>
                           <button
                             onClick={() => handleDeleteTestimonial(testimonial.id)}
-                            className="text-red-500 hover:text-red-400 p-2"
+                            className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <Trash2 className="w-3 h-3" />
+                            Delete
                           </button>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
-                  {testimonials.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">No testimonials yet.</p>
-                  )}
                 </div>
               </div>
             )}
 
-            {activeTab === 'settings' && <AdminSettings />}
+            {activeTab === 'security' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Security Dashboard</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-gray-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Total Login Attempts</p>
+                        <p className="text-2xl font-bold text-white">{securityStats.totalAttempts}</p>
+                      </div>
+                      <Activity className="w-8 h-8 text-blue-500" />
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Failed Attempts</p>
+                        <p className="text-2xl font-bold text-red-400">{securityStats.failedAttempts}</p>
+                      </div>
+                      <AlertTriangle className="w-8 h-8 text-red-500" />
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Successful Logins</p>
+                        <p className="text-2xl font-bold text-green-400">{securityStats.successfulAttempts}</p>
+                      </div>
+                      <CheckCircle className="w-8 h-8 text-green-500" />
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-400 text-sm">Account Status</p>
+                        <p className={`text-2xl font-bold ${securityStats.isLocked ? 'text-red-400' : 'text-green-400'}`}>
+                          {securityStats.isLocked ? 'Locked' : 'Active'}
+                        </p>
+                      </div>
+                      <Shield className={`w-8 h-8 ${securityStats.isLocked ? 'text-red-500' : 'text-green-500'}`} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">Security Features</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">Rate Limiting (5 attempts/15min)</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">Session Timeout (30 minutes)</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">Input Validation & Sanitization</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">CSRF Protection</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">Secure Password Hashing</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <span className="text-white">Activity Monitoring</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              <AdminSettings />
+            )}
           </div>
         </div>
       </div>
 
-      <AddItemModal
-        type={addModalType}
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSuccess={loadData}
-      />
-
-      <EditItemModal
-        type={editModalType}
-        item={editingItem}
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setEditingItem(null);
-        }}
-        onSuccess={loadData}
-      />
-
+      {/* Modals */}
       <EventDetailsModal
         event={selectedEvent}
-        isOpen={isEventDetailsOpen}
-        onClose={() => {
-          setIsEventDetailsOpen(false);
-          setSelectedEvent(null);
-        }}
-        onStatusChange={handleEventStatusChange}
+        isOpen={showEventModal}
+        onClose={() => setShowEventModal(false)}
+        onStatusChange={handleStatusChange}
       />
 
       <MessageDetailsModal
         message={selectedMessage}
-        isOpen={isMessageDetailsOpen}
-        onClose={() => {
-          setIsMessageDetailsOpen(false);
-          setSelectedMessage(null);
+        isOpen={showMessageModal}
+        onClose={() => setShowMessageModal(false)}
+        onMarkAsViewed={handleMarkAsViewed}
+      />
+
+      <AddItemModal
+        type={addType}
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={() => {
+          loadData();
+          setShowAddModal(false);
         }}
-        onMarkAsViewed={handleMarkMessageAsViewed}
+      />
+
+      <EditItemModal
+        type={editType}
+        item={editItem}
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={() => {
+          loadData();
+          setShowEditModal(false);
+        }}
       />
 
       <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
         events={events}
         messages={messages}
       />
