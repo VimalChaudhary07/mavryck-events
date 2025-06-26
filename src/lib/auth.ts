@@ -7,8 +7,8 @@ interface AuthCredentials {
 }
 
 const VALID_CREDENTIALS: AuthCredentials = {
-  email: 'admin@festive.finesse.events',
-  password: 'FFE@admin2024'
+  email: 'admin@mavryck_events',
+  password: 'mavryck_events@admin0000'
 };
 
 export const isAuthenticated = () => {
@@ -17,44 +17,80 @@ export const isAuthenticated = () => {
 
 export const login = async (email: string, password: string): Promise<boolean> => {
   try {
+    // Check if credentials match our admin credentials
     if (email === VALID_CREDENTIALS.email && password === VALID_CREDENTIALS.password) {
-      localStorage.setItem('isAuthenticated', 'true');
       
-      // Create a proper authenticated session in Supabase
+      // First, try to sign up the admin user (this will fail if user already exists, which is fine)
       try {
-        // First, try to sign up the admin user (this will fail if user already exists, which is fine)
-        await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
           email: VALID_CREDENTIALS.email,
           password: VALID_CREDENTIALS.password,
           options: {
             emailRedirectTo: undefined // Disable email confirmation
           }
         });
+        
+        if (signUpError && !signUpError.message.includes('already registered')) {
+          console.warn('Sign up error:', signUpError);
+        }
       } catch (error) {
-        // User might already exist, continue to sign in
-        console.log('User might already exist, attempting sign in');
+        console.log('User might already exist, continuing to sign in');
       }
       
       // Now sign in with the credentials
-      try {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: VALID_CREDENTIALS.email,
-          password: VALID_CREDENTIALS.password
-        });
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: VALID_CREDENTIALS.email,
+        password: VALID_CREDENTIALS.password
+      });
+      
+      if (signInError) {
+        console.error('Sign in error:', signInError);
         
-        if (signInError) {
-          console.warn('Failed to create authenticated session:', signInError);
-          // Continue with local auth even if Supabase auth fails
+        // If sign in fails due to invalid credentials, try to handle it
+        if (signInError.message.includes('Invalid login credentials')) {
+          // Try to sign up again in case the user doesn't exist
+          const { error: retrySignUpError } = await supabase.auth.signUp({
+            email: VALID_CREDENTIALS.email,
+            password: VALID_CREDENTIALS.password,
+            options: {
+              emailRedirectTo: undefined
+            }
+          });
+          
+          if (!retrySignUpError) {
+            // Now try to sign in again
+            const { error: retrySignInError } = await supabase.auth.signInWithPassword({
+              email: VALID_CREDENTIALS.email,
+              password: VALID_CREDENTIALS.password
+            });
+            
+            if (retrySignInError) {
+              console.error('Retry sign in failed:', retrySignInError);
+              toast.error('Authentication setup failed. Please try again.');
+              return false;
+            }
+          }
         } else {
-          console.log('Authenticated session created successfully');
+          toast.error('Authentication failed. Please try again.');
+          return false;
         }
-      } catch (error) {
-        console.warn('Failed to create authenticated session:', error);
-        // Continue with local auth even if Supabase auth fails
       }
       
-      toast.success('Welcome back, Admin!');
-      return true;
+      // Set local authentication state
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      // Verify the session is active
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        console.log('Authentication successful, session active');
+        toast.success('Welcome back, Admin!');
+        return true;
+      } else {
+        console.warn('Session not found after login');
+        localStorage.setItem('isAuthenticated', 'true'); // Still allow local auth
+        toast.success('Welcome back, Admin!');
+        return true;
+      }
     }
     
     toast.error('Invalid credentials');
@@ -91,16 +127,50 @@ export const hasAdminAccess = (): boolean => {
 // Refresh authentication session
 export const refreshSession = async (): Promise<boolean> => {
   try {
-    if (isAuthenticated()) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: VALID_CREDENTIALS.email,
-        password: VALID_CREDENTIALS.password
-      });
-      return !error;
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      console.error('Session refresh failed:', error);
+      return false;
     }
-    return false;
+    return !!data.session;
   } catch (error) {
     console.error('Session refresh failed:', error);
+    return false;
+  }
+};
+
+// Get current session
+export const getCurrentSession = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Failed to get session:', error);
+      return null;
+    }
+    return data.session;
+  } catch (error) {
+    console.error('Failed to get session:', error);
+    return null;
+  }
+};
+
+// Initialize auth state
+export const initializeAuth = async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Failed to initialize auth:', error);
+      return false;
+    }
+    
+    if (data.session && data.session.user?.email === VALID_CREDENTIALS.email) {
+      localStorage.setItem('isAuthenticated', 'true');
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Auth initialization failed:', error);
     return false;
   }
 };

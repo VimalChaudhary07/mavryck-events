@@ -16,6 +16,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false
   },
   global: {
     headers: {
@@ -52,7 +53,7 @@ export function handleSupabaseError(error: any) {
   }
   
   if (error?.code === '42501') {
-    throw new Error('Permission denied. Please check your access rights.');
+    throw new Error('Permission denied. Please check your authentication status and try logging in again.');
   }
 
   if (error?.code === 'PGRST301') {
@@ -60,7 +61,11 @@ export function handleSupabaseError(error: any) {
   }
   
   if (error?.message?.includes('JWT')) {
-    throw new Error('Authentication token expired. Please refresh the page.');
+    throw new Error('Authentication token expired. Please refresh the page and log in again.');
+  }
+  
+  if (error?.message?.includes('row-level security')) {
+    throw new Error('Access denied. Please ensure you are logged in with proper permissions.');
   }
   
   if (error?.message) {
@@ -76,11 +81,30 @@ export async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
   
   while (retries > 0) {
     try {
+      // Check if we have a valid session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Authentication session error. Please log in again.');
+      }
+      
+      if (!sessionData.session) {
+        console.warn('No active session found, attempting to refresh...');
+        
+        // Try to refresh the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshData.session) {
+          throw new Error('Authentication required. Please log in again.');
+        }
+      }
+      
       return await operation();
     } catch (error: any) {
       console.error(`Database operation failed (${retries} retries left):`, error);
       
-      if (retries === 1 || !error?.message?.includes('network')) {
+      if (retries === 1 || error?.message?.includes('Authentication')) {
         throw error;
       }
       
@@ -103,3 +127,14 @@ export async function checkConnection(): Promise<boolean> {
     return false;
   }
 }
+
+// Auth state change listener
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Auth state changed:', event, session?.user?.email);
+  
+  if (event === 'SIGNED_IN' && session?.user?.email === 'admin@mavryck_events') {
+    localStorage.setItem('isAuthenticated', 'true');
+  } else if (event === 'SIGNED_OUT') {
+    localStorage.removeItem('isAuthenticated');
+  }
+});

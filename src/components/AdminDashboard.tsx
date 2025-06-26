@@ -17,6 +17,7 @@ import {
   updateContactMessage,
   testDatabaseConnection
 } from '../lib/database';
+import { getCurrentSession, refreshSession } from '../lib/auth';
 import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
 import { AddItemModal } from './AddItemModal';
 import { EditItemModal } from './EditItemModal';
@@ -50,16 +51,37 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const [refreshing, setRefreshing] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
 
   useEffect(() => {
-    checkConnectionAndLoadData();
+    initializeDashboard();
   }, []);
 
-  const checkConnectionAndLoadData = async () => {
+  const initializeDashboard = async () => {
     try {
+      setAuthStatus('checking');
       setConnectionStatus('checking');
-      const isConnected = await testDatabaseConnection();
       
+      // Check authentication status
+      const session = await getCurrentSession();
+      if (session && session.user?.email === 'admin@mavryck_events') {
+        setAuthStatus('authenticated');
+        console.log('Admin authenticated successfully');
+      } else {
+        // Try to refresh session
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          setAuthStatus('authenticated');
+          console.log('Session refreshed successfully');
+        } else {
+          setAuthStatus('unauthenticated');
+          toast.error('Authentication required. Please log in again.');
+          return;
+        }
+      }
+      
+      // Test database connection
+      const isConnected = await testDatabaseConnection();
       if (isConnected) {
         setConnectionStatus('connected');
         await loadData();
@@ -68,9 +90,10 @@ export function AdminDashboard() {
         toast.error('Database connection failed. Please check your connection.');
       }
     } catch (error) {
-      console.error('Connection check failed:', error);
+      console.error('Dashboard initialization failed:', error);
       setConnectionStatus('disconnected');
-      toast.error('Failed to connect to database');
+      setAuthStatus('unauthenticated');
+      toast.error('Failed to initialize dashboard');
     }
   };
 
@@ -117,7 +140,7 @@ export function AdminDashboard() {
       });
     } catch (error) {
       console.error('Failed to load data:', error);
-      toast.error('Failed to load dashboard data');
+      toast.error('Failed to load dashboard data. Please check your authentication.');
     } finally {
       setLoading(false);
     }
@@ -125,7 +148,7 @@ export function AdminDashboard() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await checkConnectionAndLoadData();
+    await initializeDashboard();
     setRefreshing(false);
     toast.success('Data refreshed successfully');
   };
@@ -151,7 +174,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error(`Failed to delete ${type}:`, error);
-      toast.error(`Failed to delete ${type}`);
+      toast.error(`Failed to delete ${type}. Please check your authentication.`);
     }
   };
 
@@ -215,7 +238,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to delete event:', error);
-      toast.error('Failed to delete event');
+      toast.error('Failed to delete event. Please check your authentication.');
     }
   };
 
@@ -228,7 +251,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to delete message:', error);
-      toast.error('Failed to delete message');
+      toast.error('Failed to delete message. Please check your authentication.');
     }
   };
 
@@ -241,7 +264,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to delete gallery item:', error);
-      toast.error('Failed to delete gallery item');
+      toast.error('Failed to delete gallery item. Please check your authentication.');
     }
   };
 
@@ -254,7 +277,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to delete product:', error);
-      toast.error('Failed to delete product');
+      toast.error('Failed to delete product. Please check your authentication.');
     }
   };
 
@@ -267,7 +290,7 @@ export function AdminDashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to delete testimonial:', error);
-      toast.error('Failed to delete testimonial');
+      toast.error('Failed to delete testimonial. Please check your authentication.');
     }
   };
 
@@ -282,7 +305,7 @@ export function AdminDashboard() {
       }
     } catch (error) {
       console.error('Failed to update event status:', error);
-      toast.error('Failed to update event status');
+      toast.error('Failed to update event status. Please check your authentication.');
     }
   };
 
@@ -297,7 +320,7 @@ export function AdminDashboard() {
       }
     } catch (error) {
       console.error('Failed to mark message as viewed:', error);
-      toast.error('Failed to update message status');
+      toast.error('Failed to update message status. Please check your authentication.');
     }
   };
 
@@ -379,12 +402,30 @@ export function AdminDashboard() {
     }
   };
 
-  if (loading && connectionStatus === 'checking') {
+  if (loading && (connectionStatus === 'checking' || authStatus === 'checking')) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Authentication Required</h2>
+          <p className="text-gray-400 mb-6">Please log in to access the admin dashboard.</p>
+          <button
+            onClick={() => window.location.href = '/admin'}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-colors"
+          >
+            Go to Login
+          </button>
         </div>
       </div>
     );
@@ -398,6 +439,20 @@ export function AdminDashboard() {
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Dashboard</h1>
             <div className="flex items-center gap-4">
+              {/* Auth Status */}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
+                authStatus === 'authenticated' 
+                  ? 'bg-green-500/10 text-green-400' 
+                  : 'bg-red-500/10 text-red-400'
+              }`}>
+                {authStatus === 'authenticated' ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : (
+                  <AlertCircle className="w-4 h-4" />
+                )}
+                <span className="capitalize">{authStatus}</span>
+              </div>
+              
               {/* Connection Status */}
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
                 connectionStatus === 'connected' 
