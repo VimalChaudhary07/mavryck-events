@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { createGalleryItem, createProduct, createTestimonial } from '../lib/database';
@@ -12,79 +12,84 @@ interface AddItemModalProps {
 }
 
 export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalProps) {
-  const [formData, setFormData] = useState(() => {
+  const [formData, setFormData] = useState<any>({});
+
+  // Reset form data when type changes
+  useEffect(() => {
     switch (type) {
       case 'gallery':
-        return {
+        setFormData({
           title: '',
           image_url: '',
           description: '',
-          category: 'Corporate' as const
-        };
+          category: 'Corporate'
+        });
+        break;
       case 'product':
-        return {
+        setFormData({
           name: '',
           description: '',
           price: '',
           image_url: ''
-        };
+        });
+        break;
       case 'testimonial':
-        return {
+        setFormData({
           name: '',
           role: '',
           content: '',
           rating: 5,
           avatar_url: ''
-        };
+        });
+        break;
       default:
-        return {};
+        setFormData({});
     }
-  });
+  }, [type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (type === 'gallery') {
-        await createGalleryItem(formData as any);
+        await createGalleryItem(formData);
       } else if (type === 'product') {
-        await createProduct(formData as any);
+        await createProduct(formData);
       } else if (type === 'testimonial') {
-        await createTestimonial(formData as any);
+        await createTestimonial(formData);
       }
       
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully`);
       onSuccess();
       onClose();
       
-      // Reset form data
-      setFormData(() => {
-        switch (type) {
-          case 'gallery':
-            return {
-              title: '',
-              image_url: '',
-              description: '',
-              category: 'Corporate' as const
-            };
-          case 'product':
-            return {
-              name: '',
-              description: '',
-              price: '',
-              image_url: ''
-            };
-          case 'testimonial':
-            return {
-              name: '',
-              role: '',
-              content: '',
-              rating: 5,
-              avatar_url: ''
-            };
-          default:
-            return {};
-        }
-      });
+      // Reset form data after successful submission
+      switch (type) {
+        case 'gallery':
+          setFormData({
+            title: '',
+            image_url: '',
+            description: '',
+            category: 'Corporate'
+          });
+          break;
+        case 'product':
+          setFormData({
+            name: '',
+            description: '',
+            price: '',
+            image_url: ''
+          });
+          break;
+        case 'testimonial':
+          setFormData({
+            name: '',
+            role: '',
+            content: '',
+            rating: 5,
+            avatar_url: ''
+          });
+          break;
+      }
     } catch (error) {
       console.error('Failed to add item:', error);
       toast.error(`Failed to add ${type}`);
@@ -93,7 +98,7 @@ export function AddItemModal({ type, isOpen, onClose, onSuccess }: AddItemModalP
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ 
+    setFormData((prev: any) => ({ 
       ...prev, 
       [id]: id === 'rating' ? parseInt(value) : value 
     }));

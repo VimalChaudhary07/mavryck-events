@@ -20,16 +20,37 @@ export const login = async (email: string, password: string): Promise<boolean> =
     if (email === VALID_CREDENTIALS.email && password === VALID_CREDENTIALS.password) {
       localStorage.setItem('isAuthenticated', 'true');
       
-      // Create a session in Supabase for authenticated operations
+      // Create a proper authenticated session in Supabase
       try {
-        const { error } = await supabase.auth.signInAnonymously();
-        if (error) {
-          console.warn('Failed to create anonymous session:', error);
+        // First, try to sign up the admin user (this will fail if user already exists, which is fine)
+        await supabase.auth.signUp({
+          email: VALID_CREDENTIALS.email,
+          password: VALID_CREDENTIALS.password,
+          options: {
+            emailRedirectTo: undefined // Disable email confirmation
+          }
+        });
+      } catch (error) {
+        // User might already exist, continue to sign in
+        console.log('User might already exist, attempting sign in');
+      }
+      
+      // Now sign in with the credentials
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: VALID_CREDENTIALS.email,
+          password: VALID_CREDENTIALS.password
+        });
+        
+        if (signInError) {
+          console.warn('Failed to create authenticated session:', signInError);
+          // Continue with local auth even if Supabase auth fails
         } else {
-          console.log('Anonymous session created successfully');
+          console.log('Authenticated session created successfully');
         }
       } catch (error) {
-        console.warn('Failed to create anonymous session:', error);
+        console.warn('Failed to create authenticated session:', error);
+        // Continue with local auth even if Supabase auth fails
       }
       
       toast.success('Welcome back, Admin!');
@@ -71,7 +92,10 @@ export const hasAdminAccess = (): boolean => {
 export const refreshSession = async (): Promise<boolean> => {
   try {
     if (isAuthenticated()) {
-      const { error } = await supabase.auth.signInAnonymously();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: VALID_CREDENTIALS.email,
+        password: VALID_CREDENTIALS.password
+      });
       return !error;
     }
     return false;
