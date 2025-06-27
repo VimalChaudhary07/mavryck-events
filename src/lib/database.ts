@@ -1,4 +1,4 @@
-import { supabase, handleSupabaseError, withAuth } from './supabase';
+import { supabase, handleSupabaseError } from './supabase';
 import type { 
   EventRequest, 
   ContactMessage, 
@@ -12,11 +12,76 @@ import type {
   TestimonialInsert
 } from '../types/supabase';
 
+// Helper function for anonymous operations (no auth required)
+async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    console.error('Anonymous operation failed:', error);
+    
+    // If it's an auth error, try to clear any stale session and retry
+    if (error?.message?.includes('JWT') || error?.message?.includes('auth')) {
+      try {
+        await supabase.auth.signOut();
+        return await operation();
+      } catch (retryError) {
+        console.error('Retry after auth clear failed:', retryError);
+        throw retryError;
+      }
+    }
+    
+    throw error;
+  }
+}
+
+// Helper function for authenticated operations with better error handling
+async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
+  let retries = 3;
+  
+  while (retries > 0) {
+    try {
+      // Check if we have a valid session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Authentication session error. Please log in again.');
+      }
+      
+      if (!sessionData.session) {
+        console.warn('No active session found, attempting to refresh...');
+        
+        // Try to refresh the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshData.session) {
+          throw new Error('Authentication required. Please log in again.');
+        }
+      }
+      
+      return await operation();
+    } catch (error: any) {
+      console.error(`Database operation failed (${retries} retries left):`, error);
+      
+      if (retries === 1 || error?.message?.includes('Authentication')) {
+        throw error;
+      }
+      
+      retries--;
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  throw new Error('Operation failed after multiple retries');
+}
+
 // Event Requests
 export async function createEventRequest(data: EventRequestInsert): Promise<EventRequest> {
-  try {
+  return withAnonymousAccess(async () => {
     console.log('Creating event request:', data);
     
+    // Ensure we're not using any authentication for this operation
     const { data: result, error } = await supabase
       .from('event_requests')
       .insert(data)
@@ -25,15 +90,18 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
 
     if (error) {
       console.error('Event request creation error:', error);
+      
+      // Provide more specific error messages
+      if (error.code === '42501') {
+        throw new Error('Unable to submit event request. Please try again or contact us directly.');
+      }
+      
       handleSupabaseError(error);
     }
     
     console.log('Event request created successfully:', result);
     return result;
-  } catch (error) {
-    console.error('Failed to create event request:', error);
-    throw error;
-  }
+  });
 }
 
 export async function getEventRequests(): Promise<EventRequest[]> {
@@ -95,9 +163,10 @@ export async function deleteEventRequest(id: string): Promise<void> {
 
 // Contact Messages
 export async function createContactMessage(data: ContactMessageInsert): Promise<ContactMessage> {
-  try {
+  return withAnonymousAccess(async () => {
     console.log('Creating contact message:', data);
     
+    // Ensure we're not using any authentication for this operation
     const { data: result, error } = await supabase
       .from('contact_messages')
       .insert(data)
@@ -106,15 +175,18 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
 
     if (error) {
       console.error('Contact message creation error:', error);
+      
+      // Provide more specific error messages
+      if (error.code === '42501') {
+        throw new Error('Unable to send message. Please try again or contact us directly at mavryckevents@gmail.com');
+      }
+      
       handleSupabaseError(error);
     }
     
     console.log('Contact message created successfully:', result);
     return result;
-  } catch (error) {
-    console.error('Failed to create contact message:', error);
-    throw error;
-  }
+  });
 }
 
 export async function getContactMessages(): Promise<ContactMessage[]> {
