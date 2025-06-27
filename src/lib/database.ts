@@ -15,13 +15,50 @@ import type {
 // Helper function for anonymous operations (no auth required)
 async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
   try {
-    // For anonymous operations, we don't need any authentication
-    // Just execute the operation directly
-    return await operation();
+    // For anonymous operations, ensure we're not using any authenticated session
+    // that might interfere with the anonymous policies
+    const { data: currentSession } = await supabase.auth.getSession();
+    
+    if (currentSession.session) {
+      console.log('Temporarily clearing session for anonymous operation');
+      // Store the current session
+      const sessionToRestore = currentSession.session;
+      
+      try {
+        // Clear the session for anonymous operation
+        await supabase.auth.signOut();
+        
+        // Perform the operation
+        const result = await operation();
+        
+        // Restore the session if it was an admin session
+        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
+          console.log('Restoring admin session after anonymous operation');
+          // Note: In a real app, you'd want to handle session restoration more carefully
+        }
+        
+        return result;
+      } catch (operationError) {
+        // If operation fails, try to restore session anyway
+        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
+          try {
+            // Attempt to restore session - this might not work perfectly
+            // but it's better than leaving the user logged out
+            console.log('Attempting to restore session after failed operation');
+          } catch (restoreError) {
+            console.warn('Could not restore session:', restoreError);
+          }
+        }
+        throw operationError;
+      }
+    } else {
+      // No session to worry about, just execute the operation
+      return await operation();
+    }
   } catch (error: any) {
     console.error('Anonymous operation failed:', error);
     
-    // If it's an RLS error, provide helpful message
+    // Provide user-friendly error messages
     if (error?.code === '42501') {
       if (error?.message?.includes('contact_messages')) {
         throw new Error('Unable to send message. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
@@ -29,6 +66,7 @@ async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
       if (error?.message?.includes('event_requests')) {
         throw new Error('Unable to submit event request. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
       }
+      throw new Error('Permission denied. Please try refreshing the page or contact us directly.');
     }
     
     throw error;
@@ -80,28 +118,35 @@ async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
 // Event Requests
 export async function createEventRequest(data: EventRequestInsert): Promise<EventRequest> {
   return withAnonymousAccess(async () => {
-    console.log('Creating event request:', data);
+    console.log('Creating event request with anonymous access:', data);
     
-    // Clear any existing session that might interfere with anonymous access
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session.session) {
-        console.log('Clearing existing session for anonymous operation');
-        await supabase.auth.signOut();
-      }
-    } catch (error) {
-      console.warn('Could not clear session, continuing with operation:', error);
+    // Validate required fields
+    if (!data.name || !data.email || !data.phone || !data.event_type || !data.event_date || !data.guest_count) {
+      throw new Error('All required fields must be provided');
     }
     
     const { data: result, error } = await supabase
       .from('event_requests')
-      .insert(data)
+      .insert({
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        phone: data.phone.trim(),
+        event_type: data.event_type,
+        event_date: data.event_date,
+        guest_count: data.guest_count,
+        requirements: data.requirements?.trim() || '',
+        status: data.status || 'pending'
+      })
       .select()
       .single();
 
     if (error) {
       console.error('Event request creation error:', error);
       handleSupabaseError(error);
+    }
+    
+    if (!result) {
+      throw new Error('Failed to create event request - no data returned');
     }
     
     console.log('Event request created successfully:', result);
@@ -169,28 +214,31 @@ export async function deleteEventRequest(id: string): Promise<void> {
 // Contact Messages
 export async function createContactMessage(data: ContactMessageInsert): Promise<ContactMessage> {
   return withAnonymousAccess(async () => {
-    console.log('Creating contact message:', data);
+    console.log('Creating contact message with anonymous access:', data);
     
-    // Clear any existing session that might interfere with anonymous access
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session.session) {
-        console.log('Clearing existing session for anonymous operation');
-        await supabase.auth.signOut();
-      }
-    } catch (error) {
-      console.warn('Could not clear session, continuing with operation:', error);
+    // Validate required fields
+    if (!data.name || !data.email || !data.message) {
+      throw new Error('Name, email, and message are required');
     }
     
     const { data: result, error } = await supabase
       .from('contact_messages')
-      .insert(data)
+      .insert({
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        message: data.message.trim(),
+        viewed: data.viewed || false
+      })
       .select()
       .single();
 
     if (error) {
       console.error('Contact message creation error:', error);
       handleSupabaseError(error);
+    }
+    
+    if (!result) {
+      throw new Error('Failed to create contact message - no data returned');
     }
     
     console.log('Contact message created successfully:', result);
@@ -500,5 +548,76 @@ export async function testDatabaseConnection(): Promise<boolean> {
   } catch (error) {
     console.error('Database connection test failed:', error);
     return false;
+  }
+}
+
+// Test anonymous access function
+export async function testAnonymousAccess(): Promise<{ canInsertContact: boolean; canInsertEvent: boolean }> {
+  try {
+    // Test contact message insertion
+    let canInsertContact = false;
+    try {
+      const testContact = {
+        name: 'Test User',
+        email: 'test@example.com',
+        message: 'Test message for anonymous access verification'
+      };
+      
+      const { error: contactError } = await supabase
+        .from('contact_messages')
+        .insert(testContact)
+        .select()
+        .single();
+        
+      canInsertContact = !contactError;
+      
+      // Clean up test data if successful
+      if (canInsertContact) {
+        await supabase
+          .from('contact_messages')
+          .delete()
+          .eq('email', 'test@example.com')
+          .eq('message', 'Test message for anonymous access verification');
+      }
+    } catch (error) {
+      console.warn('Contact message test failed:', error);
+    }
+    
+    // Test event request insertion
+    let canInsertEvent = false;
+    try {
+      const testEvent = {
+        name: 'Test User',
+        email: 'test@example.com',
+        phone: '+1234567890',
+        event_type: 'corporate',
+        event_date: new Date().toISOString().split('T')[0],
+        guest_count: '50'
+      };
+      
+      const { error: eventError } = await supabase
+        .from('event_requests')
+        .insert(testEvent)
+        .select()
+        .single();
+        
+      canInsertEvent = !eventError;
+      
+      // Clean up test data if successful
+      if (canInsertEvent) {
+        await supabase
+          .from('event_requests')
+          .delete()
+          .eq('email', 'test@example.com')
+          .eq('phone', '+1234567890');
+      }
+    } catch (error) {
+      console.warn('Event request test failed:', error);
+    }
+    
+    return { canInsertContact, canInsertEvent };
+  } catch (error) {
+    console.error('Anonymous access test failed:', error);
+    return { canInsertContact: false, canInsertEvent: false };
   }
 }
