@@ -15,18 +15,19 @@ import type {
 // Helper function for anonymous operations (no auth required)
 async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
   try {
+    // For anonymous operations, we don't need any authentication
+    // Just execute the operation directly
     return await operation();
   } catch (error: any) {
     console.error('Anonymous operation failed:', error);
     
-    // If it's an auth error, try to clear any stale session and retry
-    if (error?.message?.includes('JWT') || error?.message?.includes('auth')) {
-      try {
-        await supabase.auth.signOut();
-        return await operation();
-      } catch (retryError) {
-        console.error('Retry after auth clear failed:', retryError);
-        throw retryError;
+    // If it's an RLS error, provide helpful message
+    if (error?.code === '42501') {
+      if (error?.message?.includes('contact_messages')) {
+        throw new Error('Unable to send message. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
+      }
+      if (error?.message?.includes('event_requests')) {
+        throw new Error('Unable to submit event request. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
       }
     }
     
@@ -81,7 +82,17 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
   return withAnonymousAccess(async () => {
     console.log('Creating event request:', data);
     
-    // Ensure we're not using any authentication for this operation
+    // Clear any existing session that might interfere with anonymous access
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        console.log('Clearing existing session for anonymous operation');
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.warn('Could not clear session, continuing with operation:', error);
+    }
+    
     const { data: result, error } = await supabase
       .from('event_requests')
       .insert(data)
@@ -90,12 +101,6 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
 
     if (error) {
       console.error('Event request creation error:', error);
-      
-      // Provide more specific error messages
-      if (error.code === '42501') {
-        throw new Error('Unable to submit event request. Please try again or contact us directly.');
-      }
-      
       handleSupabaseError(error);
     }
     
@@ -166,7 +171,17 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
   return withAnonymousAccess(async () => {
     console.log('Creating contact message:', data);
     
-    // Ensure we're not using any authentication for this operation
+    // Clear any existing session that might interfere with anonymous access
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        console.log('Clearing existing session for anonymous operation');
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.warn('Could not clear session, continuing with operation:', error);
+    }
+    
     const { data: result, error } = await supabase
       .from('contact_messages')
       .insert(data)
@@ -175,12 +190,6 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
 
     if (error) {
       console.error('Contact message creation error:', error);
-      
-      // Provide more specific error messages
-      if (error.code === '42501') {
-        throw new Error('Unable to send message. Please try again or contact us directly at mavryckevents@gmail.com');
-      }
-      
       handleSupabaseError(error);
     }
     
