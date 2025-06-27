@@ -1,4 +1,4 @@
-import { supabase, handleSupabaseError, withAuth } from './supabase';
+import { supabase, handleSupabaseError } from './supabase';
 import type { 
   EventRequest, 
   ContactMessage, 
@@ -12,10 +12,86 @@ import type {
   TestimonialInsert
 } from '../types/supabase';
 
+// Helper function for anonymous operations (no auth required)
+async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    // For anonymous operations, we don't need any authentication
+    // Just execute the operation directly
+    return await operation();
+  } catch (error: any) {
+    console.error('Anonymous operation failed:', error);
+    
+    // If it's an RLS error, provide helpful message
+    if (error?.code === '42501') {
+      if (error?.message?.includes('contact_messages')) {
+        throw new Error('Unable to send message. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
+      }
+      if (error?.message?.includes('event_requests')) {
+        throw new Error('Unable to submit event request. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
+      }
+    }
+    
+    throw error;
+  }
+}
+
+// Helper function for authenticated operations with better error handling
+async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
+  let retries = 3;
+  
+  while (retries > 0) {
+    try {
+      // Check if we have a valid session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Authentication session error. Please log in again.');
+      }
+      
+      if (!sessionData.session) {
+        console.warn('No active session found, attempting to refresh...');
+        
+        // Try to refresh the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshData.session) {
+          throw new Error('Authentication required. Please log in again.');
+        }
+      }
+      
+      return await operation();
+    } catch (error: any) {
+      console.error(`Database operation failed (${retries} retries left):`, error);
+      
+      if (retries === 1 || error?.message?.includes('Authentication')) {
+        throw error;
+      }
+      
+      retries--;
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  throw new Error('Operation failed after multiple retries');
+}
+
 // Event Requests
 export async function createEventRequest(data: EventRequestInsert): Promise<EventRequest> {
-  try {
+  return withAnonymousAccess(async () => {
     console.log('Creating event request:', data);
+    
+    // Clear any existing session that might interfere with anonymous access
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        console.log('Clearing existing session for anonymous operation');
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.warn('Could not clear session, continuing with operation:', error);
+    }
     
     const { data: result, error } = await supabase
       .from('event_requests')
@@ -30,10 +106,7 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
     
     console.log('Event request created successfully:', result);
     return result;
-  } catch (error) {
-    console.error('Failed to create event request:', error);
-    throw error;
-  }
+  });
 }
 
 export async function getEventRequests(): Promise<EventRequest[]> {
@@ -95,8 +168,19 @@ export async function deleteEventRequest(id: string): Promise<void> {
 
 // Contact Messages
 export async function createContactMessage(data: ContactMessageInsert): Promise<ContactMessage> {
-  try {
+  return withAnonymousAccess(async () => {
     console.log('Creating contact message:', data);
+    
+    // Clear any existing session that might interfere with anonymous access
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        console.log('Clearing existing session for anonymous operation');
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.warn('Could not clear session, continuing with operation:', error);
+    }
     
     const { data: result, error } = await supabase
       .from('contact_messages')
@@ -111,10 +195,7 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
     
     console.log('Contact message created successfully:', result);
     return result;
-  } catch (error) {
-    console.error('Failed to create contact message:', error);
-    throw error;
-  }
+  });
 }
 
 export async function getContactMessages(): Promise<ContactMessage[]> {
