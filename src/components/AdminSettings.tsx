@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 import { 
   getEventRequests, 
   getContactMessages, 
@@ -30,6 +31,13 @@ interface RestoreProgress {
   errors: string[];
 }
 
+interface SiteSettings {
+  id?: string;
+  google_photos_url: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export function AdminSettings() {
   const [activeSection, setActiveSection] = useState('gallery');
   const [isLoading, setIsLoading] = useState(false);
@@ -47,26 +55,77 @@ export function AdminSettings() {
   });
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-    if (savedSettings) {
-      try {
-        const parsedSettings = JSON.parse(savedSettings);
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      // Try to load from database first
+      const { data: dbSettings, error } = await supabase
+        .from('site_settings')
+        .select('*')
+        .single();
+
+      if (dbSettings && !error) {
         setSettings(prev => ({
           ...prev,
           gallery: {
-            googlePhotosUrl: parsedSettings.business?.contact?.googlePhotosUrl || prev.gallery.googlePhotosUrl
+            googlePhotosUrl: dbSettings.google_photos_url || prev.gallery.googlePhotosUrl
           }
         }));
-      } catch (error) {
-        console.error('Failed to load settings:', error);
+      } else {
+        // Fallback to localStorage for backward compatibility
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+          try {
+            const parsedSettings = JSON.parse(savedSettings);
+            setSettings(prev => ({
+              ...prev,
+              gallery: {
+                googlePhotosUrl: parsedSettings.business?.contact?.googlePhotosUrl || prev.gallery.googlePhotosUrl
+              }
+            }));
+          } catch (error) {
+            console.error('Failed to load settings from localStorage:', error);
+          }
+        }
       }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
     }
-  }, []);
+  };
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
     try {
-      // Save in the old format for backward compatibility
+      // Save to database
+      const { data: existingSettings } = await supabase
+        .from('site_settings')
+        .select('id')
+        .single();
+
+      const settingsData = {
+        google_photos_url: settings.gallery.googlePhotosUrl
+      };
+
+      if (existingSettings) {
+        // Update existing settings
+        const { error } = await supabase
+          .from('site_settings')
+          .update(settingsData)
+          .eq('id', existingSettings.id);
+
+        if (error) throw error;
+      } else {
+        // Create new settings
+        const { error } = await supabase
+          .from('site_settings')
+          .insert(settingsData);
+
+        if (error) throw error;
+      }
+
+      // Also save to localStorage for backward compatibility
       const settingsToSave = {
         business: {
           contact: {
@@ -75,10 +134,26 @@ export function AdminSettings() {
         }
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
-      toast.success('Settings updated successfully');
+
+      toast.success('Settings saved successfully to database');
     } catch (error) {
       console.error('Failed to save settings:', error);
-      toast.error('Failed to update settings');
+      
+      // Fallback to localStorage only
+      try {
+        const settingsToSave = {
+          business: {
+            contact: {
+              googlePhotosUrl: settings.gallery.googlePhotosUrl
+            }
+          }
+        };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+        toast.success('Settings saved to local storage (database unavailable)');
+      } catch (localError) {
+        console.error('Failed to save to localStorage:', localError);
+        toast.error('Failed to save settings');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -282,6 +357,7 @@ export function AdminSettings() {
         'Total Gallery Items': gallery?.length || 0,
         'Total Products': products?.length || 0,
         'Total Testimonials': testimonials?.length || 0,
+        'Google Photos URL': settings.gallery.googlePhotosUrl,
         'Backup Version': '2.0',
         'Application': 'Mavryck Events Management System'
       }]);
@@ -572,11 +648,21 @@ export function AdminSettings() {
                 value={settings.gallery.googlePhotosUrl}
                 onChange={(e) => handleGooglePhotosUrlChange(e.target.value)}
                 placeholder="https://photos.google.com/share/your-album-link"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
               <p className="text-sm text-gray-400 mt-1">
                 This URL will be used for the "View More" button in the gallery section
               </p>
+              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm text-blue-400 font-medium">Database Storage</span>
+                </div>
+                <p className="text-xs text-blue-300">
+                  Settings are now saved to the Supabase database for persistence across sessions. 
+                  A backup copy is also maintained in local storage for compatibility.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -608,6 +694,7 @@ export function AdminSettings() {
                   <li>• Gallery Items with category validation</li>
                   <li>• Products with pricing information</li>
                   <li>• Testimonials with rating validation</li>
+                  <li>• Settings including Google Photos URL</li>
                   <li>• Backup metadata and statistics</li>
                   <li>• Optimized column widths and formatting</li>
                 </ul>
@@ -742,7 +829,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
           <div>
@@ -759,7 +846,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
           <div>
@@ -776,7 +863,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
         </div>
