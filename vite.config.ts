@@ -28,14 +28,17 @@ export default defineConfig({
           // Split vendor chunks for better caching
           vendor: ['react', 'react-dom'],
           ui: ['framer-motion', 'lucide-react'],
-          utils: ['react-hot-toast', 'react-router-dom']
+          utils: ['react-hot-toast', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js']
         }
       }
     },
-    // Enable source maps for debugging
+    // Disable source maps for production to reduce bundle size
     sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
+    // Target modern browsers for better optimization
+    target: 'esnext'
   },
   optimizeDeps: {
     // Pre-bundle dependencies for faster dev server startup
@@ -46,7 +49,8 @@ export default defineConfig({
       'lucide-react',
       'react-hot-toast',
       'react-router-dom',
-      '@supabase/supabase-js'
+      '@supabase/supabase-js',
+      'web-vitals'
     ]
   },
   // Enable CSS code splitting
@@ -55,5 +59,10 @@ export default defineConfig({
     modules: {
       localsConvention: 'camelCase'
     }
+  },
+  // Define environment variables for build optimization
+  define: {
+    __DEV__: JSON.stringify(!process.env.NODE_ENV || process.env.NODE_ENV === 'development'),
+    __PROD__: JSON.stringify(process.env.NODE_ENV === 'production')
   }
 });

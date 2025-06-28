@@ -54,11 +54,6 @@ export function preloadImage(src: string): Promise<void> {
   });
 }
 
-// Optimize bundle loading
-export function loadChunk(chunkName: string): Promise<any> {
-  return import(/* webpackChunkName: "[request]" */ `../components/${chunkName}`);
-}
-
 // Memory management
 export function cleanupEventListeners(element: HTMLElement): void {
   const clone = element.cloneNode(true);
@@ -96,20 +91,35 @@ export const performanceMonitor = new PerformanceMonitor();
 
 // Web Vitals monitoring
 export function measureWebVitals(): void {
-  if ('web-vital' in window) {
-    // Measure Core Web Vitals
+  // Only measure web vitals in production and if the library is available
+  if (import.meta.env.PROD && typeof window !== 'undefined') {
+    // Dynamically import web-vitals only when needed
     import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-      getCLS(console.log);
-      getFID(console.log);
-      getFCP(console.log);
-      getLCP(console.log);
-      getTTFB(console.log);
+      getCLS((metric) => {
+        console.log('CLS:', metric);
+      });
+      getFID((metric) => {
+        console.log('FID:', metric);
+      });
+      getFCP((metric) => {
+        console.log('FCP:', metric);
+      });
+      getLCP((metric) => {
+        console.log('LCP:', metric);
+      });
+      getTTFB((metric) => {
+        console.log('TTFB:', metric);
+      });
+    }).catch((error) => {
+      console.warn('Failed to load web-vitals:', error);
     });
   }
 }
 
 // Resource hints
 export function addResourceHints(): void {
+  if (typeof document === 'undefined') return;
+  
   const head = document.head;
 
   // Preconnect to external domains
@@ -141,6 +151,9 @@ export function addResourceHints(): void {
 
 // Initialize performance optimizations
 export function initializePerformanceOptimizations(): void {
+  // Only run in browser environment
+  if (typeof window === 'undefined') return;
+
   // Add resource hints
   addResourceHints();
 
