@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Star, ArrowRight, ArrowLeft, ExternalLink } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Star, ArrowRight, ArrowLeft, ExternalLink, Loader } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getGalleryItems, getProducts } from '../lib/database';
 import type { GalleryItem, Product } from '../types/supabase';
 
@@ -14,6 +14,38 @@ export function GalleryAndProducts() {
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
   const [googlePhotosUrl, setGooglePhotosUrl] = useState('https://photos.google.com/share/your-album-link');
   const [loading, setLoading] = useState(true);
+  const [imageLoadingStates, setImageLoadingStates] = useState<Record<string, boolean>>({});
+
+  // Memoize filtered images to prevent unnecessary recalculations
+  const filteredImages = useMemo(() => {
+    return selectedCategory === 'All'
+      ? galleryImages
+      : galleryImages.filter(img => img.category === selectedCategory);
+  }, [galleryImages, selectedCategory]);
+
+  // Memoize animation variants
+  const containerVariants = useMemo(() => ({
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2
+      }
+    }
+  }), []);
+
+  const itemVariants = useMemo(() => ({
+    hidden: { opacity: 0, scale: 0.9 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut"
+      }
+    }
+  }), []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,43 +79,47 @@ export function GalleryAndProducts() {
     }
   }, []);
 
-  const filteredImages = selectedCategory === 'All'
-    ? galleryImages
-    : galleryImages.filter(img => img.category === selectedCategory);
-
-  const handlePrevImage = () => {
+  const handlePrevImage = useCallback(() => {
     setCurrentImageIndex((prev) => 
       prev === 0 ? filteredImages.length - 1 : prev - 1
     );
-  };
+  }, [filteredImages.length]);
 
-  const handleNextImage = () => {
+  const handleNextImage = useCallback(() => {
     setCurrentImageIndex((prev) => 
       prev === filteredImages.length - 1 ? 0 : prev + 1
     );
-  };
+  }, [filteredImages.length]);
 
-  const handleCategoryChange = (category: string) => {
+  const handleCategoryChange = useCallback((category: string) => {
     setSelectedCategory(category);
-    setCurrentImageIndex(0); // Reset to first image when category changes
-  };
+    setCurrentImageIndex(0);
+  }, []);
 
-  const handleImageClick = (index: number) => {
+  const handleImageClick = useCallback((index: number) => {
     setCurrentImageIndex(index);
     setShowLightbox(true);
-  };
+  }, []);
 
-  const handleViewMoreClick = () => {
+  const handleViewMoreClick = useCallback(() => {
     window.open(googlePhotosUrl, '_blank', 'noopener,noreferrer');
-  };
+  }, [googlePhotosUrl]);
+
+  const handleImageLoad = useCallback((imageId: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [imageId]: false }));
+  }, []);
+
+  const handleImageLoadStart = useCallback((imageId: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [imageId]: true }));
+  }, []);
 
   if (loading) {
     return (
-      <section id="gallery" className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-gray-900 to-black">
+      <section className="py-20 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Loading gallery and products...</p>
+            <Loader className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-4" />
+            <p className="text-gray-600">Loading gallery and products...</p>
           </div>
         </div>
       </section>
@@ -91,63 +127,80 @@ export function GalleryAndProducts() {
   }
 
   return (
-    <section id="gallery" className="py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-gray-900 to-black">
+    <section id="gallery" className="py-20 bg-gradient-to-b from-white to-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Products Section */}
         {products.length > 0 && (
-          <div className="mb-16 sm:mb-20 lg:mb-24">
+          <div className="mb-20">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="text-center mb-12 sm:mb-16"
+              className="text-center mb-16"
             >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Our Products</h2>
-              <p className="text-gray-400 max-w-2xl mx-auto text-base sm:text-lg">
-                Enhance your events with our premium services
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">Packages</span>
+              </h2>
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                Carefully curated event packages designed to make your special day perfect
               </p>
             </motion.div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+            >
               {products.map((product, index) => (
                 <motion.div
                   key={product.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.6, delay: index * 0.2 }}
-                  whileHover={{ scale: 1.02 }}
-                  className="bg-gray-800/50 backdrop-blur-sm rounded-xl overflow-hidden transition-all duration-300 border border-gray-700 hover:border-orange-500/50"
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.02, y: -5 }}
+                  className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100"
                 >
-                  <div className="h-48 sm:h-64 overflow-hidden relative group">
+                  <div className="relative h-64 overflow-hidden">
+                    {imageLoadingStates[product.id] && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                        <Loader className="w-8 h-8 animate-spin text-orange-500" />
+                      </div>
+                    )}
                     <img
                       src={product.image_url}
                       alt={product.name}
-                      className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                      className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                      onLoadStart={() => handleImageLoadStart(product.id)}
+                      onLoad={() => handleImageLoad(product.id)}
+                      loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300" />
                   </div>
-                  <div className="p-6 sm:p-8">
+                  <div className="p-8">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl sm:text-2xl font-semibold text-white">{product.name}</h3>
+                      <h3 className="text-2xl font-bold text-gray-900">{product.name}</h3>
                       <div className="flex items-center">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-current" />
+                          <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
                         ))}
                       </div>
                     </div>
-                    <p className="text-gray-400 mb-6 text-sm sm:text-base">{product.description}</p>
+                    <p className="text-gray-600 mb-6 leading-relaxed">{product.description}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-2xl sm:text-3xl font-bold text-orange-500">{product.price}</span>
-                      <button className="bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/20 text-sm sm:text-base">
+                      <span className="text-3xl font-bold text-orange-500">{product.price}</span>
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-6 py-3 rounded-full font-semibold transition-all duration-300 shadow-lg hover:shadow-orange-500/25"
+                      >
                         Book Now
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           </div>
         )}
 
@@ -158,56 +211,77 @@ export function GalleryAndProducts() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12 sm:mb-16"
+            className="text-center mb-16"
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Event Gallery</h2>
-            <p className="text-gray-400 max-w-2xl mx-auto mb-6 sm:mb-8 text-base sm:text-lg">
-              Browse through our collection of successful events
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Event <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">Gallery</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
+              Browse through our collection of successful events and celebrations
             </p>
-            <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-8 sm:mb-12">
+            
+            {/* Category Filter */}
+            <div className="flex flex-wrap justify-center gap-3 mb-12">
               {categories.map((category) => (
-                <button
+                <motion.button
                   key={category}
                   onClick={() => handleCategoryChange(category)}
-                  className={`px-3 sm:px-6 py-2 rounded-full font-medium transition-all duration-200 text-sm sm:text-base ${
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`px-6 py-3 rounded-full font-medium transition-all duration-300 ${
                     selectedCategory === category
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
                   }`}
                 >
                   {category}
-                </button>
+                </motion.button>
               ))}
             </div>
           </motion.div>
           
           {filteredImages.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-                {filteredImages.map((image, index) => (
-                  <motion.div
-                    key={image.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: index * 0.1 }}
-                    onClick={() => handleImageClick(index)}
-                    className="group relative overflow-hidden rounded-xl aspect-square cursor-pointer"
-                  >
-                    <img
-                      src={image.image_url}
-                      alt={image.title}
-                      className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-                        <h3 className="text-lg sm:text-xl font-semibold text-white">{image.title}</h3>
-                        <p className="text-orange-500 text-sm sm:text-base">{image.category}</p>
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+              >
+                <AnimatePresence mode="wait">
+                  {filteredImages.map((image, index) => (
+                    <motion.div
+                      key={`${selectedCategory}-${image.id}`}
+                      variants={itemVariants}
+                      layout
+                      onClick={() => handleImageClick(index)}
+                      whileHover={{ scale: 1.05, y: -5 }}
+                      className="group relative overflow-hidden rounded-2xl aspect-square cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300"
+                    >
+                      {imageLoadingStates[image.id] && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                          <Loader className="w-8 h-8 animate-spin text-orange-500" />
+                        </div>
+                      )}
+                      <img
+                        src={image.image_url}
+                        alt={image.title}
+                        className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
+                        onLoadStart={() => handleImageLoadStart(image.id)}
+                        onLoad={() => handleImageLoad(image.id)}
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="absolute bottom-0 left-0 right-0 p-6">
+                          <h3 className="text-xl font-bold text-white mb-1">{image.title}</h3>
+                          <p className="text-orange-400 font-medium">{image.category}</p>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
 
               {/* View More Button */}
               <motion.div
@@ -215,85 +289,97 @@ export function GalleryAndProducts() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
-                className="text-center mt-8 sm:mt-12"
+                className="text-center mt-12"
               >
-                <button
+                <motion.button
                   onClick={handleViewMoreClick}
-                  className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold text-base sm:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-orange-500/25"
                 >
-                  <span>View More Photos</span>
-                  <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-                <p className="text-gray-400 text-sm mt-3">
+                  <span>View Complete Gallery</span>
+                  <ExternalLink className="w-6 h-6" />
+                </motion.button>
+                <p className="text-gray-500 text-sm mt-3">
                   Explore our complete photo collection on Google Photos
                 </p>
               </motion.div>
             </>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-base sm:text-lg mb-6 sm:mb-8">
+              <p className="text-gray-500 text-lg mb-8">
                 {selectedCategory === 'All' 
                   ? 'No gallery items available yet.' 
                   : `No ${selectedCategory} events in gallery yet.`
                 }
               </p>
-              {/* Show View More button even when no local gallery items */}
-              <button
+              <motion.button
                 onClick={handleViewMoreClick}
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold text-base sm:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-orange-500/25"
               >
                 <span>View Our Photo Collection</span>
-                <ExternalLink className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-              <p className="text-gray-400 text-sm mt-3">
-                Explore our complete photo collection on Google Photos
-              </p>
+                <ExternalLink className="w-6 h-6" />
+              </motion.button>
             </div>
           )}
         </div>
 
-        {/* Lightbox */}
-        {showLightbox && filteredImages.length > 0 && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-            <button
+        {/* Optimized Lightbox */}
+        <AnimatePresence>
+          {showLightbox && filteredImages.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
               onClick={() => setShowLightbox(false)}
-              className="absolute top-4 right-4 text-white text-xl p-2 hover:text-orange-500 z-10"
             >
-              ✕
-            </button>
-            {filteredImages.length > 1 && (
-              <>
-                <button
-                  onClick={handlePrevImage}
-                  className="absolute left-4 text-white p-2 hover:text-orange-500 z-10"
-                >
-                  <ArrowLeft className="w-6 h-6" />
-                </button>
-                <button
-                  onClick={handleNextImage}
-                  className="absolute right-4 text-white p-2 hover:text-orange-500 z-10"
-                >
-                  <ArrowRight className="w-6 h-6" />
-                </button>
-              </>
-            )}
-            <div className="text-center max-w-full max-h-full">
-              <img
-                src={filteredImages[currentImageIndex].image_url}
-                alt={filteredImages[currentImageIndex].title}
-                className="max-h-[80vh] max-w-[90vw] object-contain"
-              />
-              <div className="mt-4">
-                <h3 className="text-lg sm:text-xl font-semibold text-white">
-                  {filteredImages[currentImageIndex].title}
-                </h3>
-                <p className="text-orange-500 text-sm sm:text-base">
-                  {filteredImages[currentImageIndex].category}
-                </p>
+              <button
+                onClick={() => setShowLightbox(false)}
+                className="absolute top-4 right-4 text-white text-2xl p-2 hover:text-orange-500 z-10 bg-black/50 rounded-full"
+              >
+                ✕
+              </button>
+              {filteredImages.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
+                    className="absolute left-4 text-white p-3 hover:text-orange-500 z-10 bg-black/50 rounded-full"
+                  >
+                    <ArrowLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
+                    className="absolute right-4 text-white p-3 hover:text-orange-500 z-10 bg-black/50 rounded-full"
+                  >
+                    <ArrowRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+              <div className="text-center max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+                <motion.img
+                  key={currentImageIndex}
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                  src={filteredImages[currentImageIndex].image_url}
+                  alt={filteredImages[currentImageIndex].title}
+                  className="max-h-[80vh] max-w-[90vw] object-contain rounded-lg"
+                />
+                <div className="mt-4">
+                  <h3 className="text-xl font-semibold text-white">
+                    {filteredImages[currentImageIndex].title}
+                  </h3>
+                  <p className="text-orange-400">
+                    {filteredImages[currentImageIndex].category}
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </section>
   );
