@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Phone, Mail, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import toast from 'react-hot-toast';
+import { X, Calendar, Users, Mail, Phone, User, FileText, Send, CheckCircle, AlertCircle } from 'lucide-react';
 import { createEventRequest } from '../lib/database';
 
 interface EventPlanningModalProps {
@@ -9,452 +7,378 @@ interface EventPlanningModalProps {
   onClose: () => void;
 }
 
-interface FormData {
-  name: string;
-  email: string;
-  phone: string;
-  event_type: string;
-  event_date: string;
-  guest_count: string;
-  requirements: string;
-}
-
-interface FormErrors {
-  [key: string]: string;
-}
-
-export function EventPlanningModal({ isOpen, onClose }: EventPlanningModalProps) {
-  const [formData, setFormData] = useState<FormData>({
+const EventPlanningModal: React.FC<EventPlanningModalProps> = ({ isOpen, onClose }) => {
+  const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    event_type: 'corporate',
+    event_type: '',
     event_date: '',
     guest_count: '',
     requirements: ''
   });
-
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  if (!isOpen) return null;
+  const eventTypes = [
+    'Corporate Event',
+    'Wedding',
+    'Birthday Party',
+    'Anniversary',
+    'Festival Celebration',
+    'Gala Dinner',
+    'Product Launch',
+    'Conference',
+    'Workshop',
+    'Other'
+  ];
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+  const guestCountOptions = [
+    '1-25 guests',
+    '26-50 guests',
+    '51-100 guests',
+    '101-200 guests',
+    '201-500 guests',
+    '500+ guests'
+  ];
 
-    // Name validation
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const validateForm = () => {
     if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Name must be at least 2 characters';
+      setErrorMessage('Name is required');
+      return false;
     }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!emailRegex.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+      setErrorMessage('Email is required');
+      return false;
     }
-
-    // Phone validation
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      setErrorMessage('Please enter a valid email address');
+      return false;
+    }
     if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!phoneRegex.test(formData.phone.replace(/[\s\-\(\)]/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
+      setErrorMessage('Phone number is required');
+      return false;
     }
-
-    // Event date validation
+    if (!formData.event_type) {
+      setErrorMessage('Event type is required');
+      return false;
+    }
     if (!formData.event_date) {
-      newErrors.event_date = 'Event date is required';
-    } else {
-      const selectedDate = new Date(formData.event_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selectedDate < today) {
-        newErrors.event_date = 'Event date cannot be in the past';
-      }
+      setErrorMessage('Event date is required');
+      return false;
     }
-
-    // Guest count validation
-    if (!formData.guest_count.trim()) {
-      newErrors.guest_count = 'Number of guests is required';
-    } else if (parseInt(formData.guest_count) < 1) {
-      newErrors.guest_count = 'Must have at least 1 guest';
+    if (!formData.guest_count) {
+      setErrorMessage('Guest count is required');
+      return false;
     }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    // Validate date is not in the past
+    const selectedDate = new Date(formData.event_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < today) {
+      setErrorMessage('Event date cannot be in the past');
+      return false;
+    }
+    
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
-      toast.error('Please fix the errors in the form');
+      setSubmitStatus('error');
       return;
     }
 
     setIsSubmitting(true);
     setSubmitStatus('idle');
+    setErrorMessage('');
 
     try {
+      console.log('Submitting event request:', formData);
+      
       await createEventRequest({
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: formData.email.trim(),
         phone: formData.phone.trim(),
         event_type: formData.event_type,
         event_date: formData.event_date,
         guest_count: formData.guest_count,
-        requirements: formData.requirements.trim(),
-        status: 'pending'
+        requirements: formData.requirements.trim()
+      });
+
+      console.log('Event request submitted successfully');
+      setSubmitStatus('success');
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        event_type: '',
+        event_date: '',
+        guest_count: '',
+        requirements: ''
       });
       
-      setSubmitStatus('success');
-      toast.success('Event request submitted successfully! We\'ll contact you within 24 hours.');
-      
-      // Reset form after successful submission
+      // Close modal after 3 seconds on success
       setTimeout(() => {
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          event_type: 'corporate',
-          event_date: '',
-          guest_count: '',
-          requirements: ''
-        });
-        setErrors({});
         setSubmitStatus('idle');
         onClose();
-      }, 2000);
-
-    } catch (error) {
-      console.error('Submission error:', error);
+      }, 3000);
+      
+    } catch (error: any) {
+      console.error('Failed to submit event request:', error);
       setSubmitStatus('error');
-      toast.error('Failed to submit request. Please try again.');
+      setErrorMessage(
+        error.message || 
+        'Unable to submit your request at this time. Please try again or contact us directly at mavryckevents@gmail.com or +91 7045712235'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
-    
-    // Clear error when user starts typing
-    if (errors[id]) {
-      setErrors(prev => ({ ...prev, [id]: '' }));
-    }
-  };
-
-  const handleDirectContact = (type: 'phone' | 'email') => {
-    if (type === 'phone') {
-      window.open('tel:+917045712235', '_self');
-    } else {
-      window.open('mailto:mavryckevents@gmail.com', '_self');
-    }
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      event_type: '',
+      event_date: '',
+      guest_count: '',
+      requirements: ''
+    });
+    setSubmitStatus('idle');
+    setErrorMessage('');
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
-      onClose();
-      setErrors({});
-      setSubmitStatus('idle');
-    }
+    resetForm();
+    onClose();
   };
 
+  if (!isOpen) return null;
+
+  // Get minimum date (today)
+  const today = new Date().toISOString().split('T')[0];
+
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
-      >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-700"
-        >
-          {/* Header */}
-          <div className="p-6 border-b border-gray-700 bg-gradient-to-r from-orange-500/10 to-red-500/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <motion.div
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.5 }}
-                  className="p-2 bg-orange-500/20 rounded-full"
-                >
-                  <Calendar className="w-6 h-6 text-orange-500" />
-                </motion.div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Plan Your Event</h2>
-                  <p className="text-gray-400">Let's create something amazing together</p>
-                </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-2xl font-bold text-gray-900">Plan Your Event</h2>
+          <button
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {submitStatus === 'success' && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md flex items-center space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+              <div>
+                <p className="text-green-700 font-medium">Request Submitted Successfully!</p>
+                <p className="text-green-600 text-sm">We'll contact you within 24 hours to discuss your event details.</p>
               </div>
-              <button
-                onClick={handleClose}
-                disabled={isSubmitting}
-                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-full disabled:opacity-50"
-              >
-                <X className="w-6 h-6" />
-              </button>
             </div>
-          </div>
+          )}
 
-          {/* Direct Contact Options */}
-          <div className="p-6 border-b border-gray-700 bg-gray-700/30">
-            <h3 className="text-lg font-medium text-white mb-4">Need Immediate Assistance?</h3>
-            <div className="flex gap-4">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleDirectContact('phone')}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                <Phone className="w-5 h-5" />
-                Call Now
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleDirectContact('email')}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                <Mail className="w-5 h-5" />
-                Email Us
-              </motion.button>
+          {submitStatus === 'error' && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md flex items-center space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+              <p className="text-red-700">{errorMessage}</p>
             </div>
-            <p className="text-gray-400 text-sm mt-3">
-              Or fill out the form below and we'll get back to you within 24 hours
-            </p>
-          </div>
+          )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Name Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                  <User className="inline h-4 w-4 mr-1" />
                   Full Name *
                 </label>
                 <input
                   type="text"
                   id="name"
+                  name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                    errors.name 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-600 focus:ring-orange-500'
-                  }`}
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="Enter your full name"
                 />
-                {errors.name && (
-                  <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.name}
-                  </p>
-                )}
-              </motion.div>
+              </div>
 
-              {/* Email Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Mail className="inline h-4 w-4 mr-1" />
                   Email Address *
                 </label>
                 <input
                   type="email"
                   id="email"
+                  name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                    errors.email 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-600 focus:ring-orange-500'
-                  }`}
-                  placeholder="your.email@example.com"
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Enter your email address"
                 />
-                {errors.email && (
-                  <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.email}
-                  </p>
-                )}
-              </motion.div>
+              </div>
+            </div>
 
-              {/* Phone Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Phone className="inline h-4 w-4 mr-1" />
                   Phone Number *
                 </label>
                 <input
                   type="tel"
                   id="phone"
+                  name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                    errors.phone 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-600 focus:ring-orange-500'
-                  }`}
-                  placeholder="+91 1234567890"
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Enter your phone number"
                 />
-                {errors.phone && (
-                  <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.phone}
-                  </p>
-                )}
-              </motion.div>
+              </div>
 
-              {/* Event Type Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="event_type" className="block text-sm font-medium text-gray-300 mb-2">
+              <div>
+                <label htmlFor="event_type" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="inline h-4 w-4 mr-1" />
                   Event Type *
                 </label>
                 <select
                   id="event_type"
+                  name="event_type"
                   value={formData.event_type}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
-                  <option value="corporate">Corporate Event</option>
-                  <option value="wedding">Wedding Event</option>
-                  <option value="birthday">Birthday Party</option>
-                  <option value="festival">Festival Event</option>
-                  <option value="charity">Charity Event</option>
-                  <option value="house-party">House Party</option>
-                  <option value="reunion">Reunion Event</option>
-                  <option value="anniversary">Anniversary Celebration</option>
-                  <option value="promotional">Promotional Event</option>
-                  <option value="gala">Gala Dinner</option>
-                  <option value="other">Other</option>
+                  <option value="">Select event type</option>
+                  {eventTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
-              </motion.div>
+              </div>
+            </div>
 
-              {/* Event Date Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="event_date" className="block text-sm font-medium text-gray-300 mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="event_date" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="inline h-4 w-4 mr-1" />
                   Event Date *
                 </label>
                 <input
                   type="date"
                   id="event_date"
+                  name="event_date"
                   value={formData.event_date}
                   onChange={handleChange}
-                  min={new Date().toISOString().split('T')[0]}
-                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                    errors.event_date 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-600 focus:ring-orange-500'
-                  }`}
+                  min={today}
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
-                {errors.event_date && (
-                  <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.event_date}
-                  </p>
-                )}
-              </motion.div>
+              </div>
 
-              {/* Guest Count Field */}
-              <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-                <label htmlFor="guest_count" className="block text-sm font-medium text-gray-300 mb-2">
-                  Number of Guests *
+              <div>
+                <label htmlFor="guest_count" className="block text-sm font-medium text-gray-700 mb-2">
+                  <Users className="inline h-4 w-4 mr-1" />
+                  Expected Guests *
                 </label>
-                <input
-                  type="number"
+                <select
                   id="guest_count"
+                  name="guest_count"
                   value={formData.guest_count}
                   onChange={handleChange}
-                  min="1"
-                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all ${
-                    errors.guest_count 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-600 focus:ring-orange-500'
-                  }`}
-                  placeholder="e.g., 50"
-                />
-                {errors.guest_count && (
-                  <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {errors.guest_count}
-                  </p>
-                )}
-              </motion.div>
+                  required
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">Select guest count</option>
+                  {guestCountOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Requirements Field */}
-            <motion.div whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }}>
-              <label htmlFor="requirements" className="block text-sm font-medium text-gray-300 mb-2">
+            <div>
+              <label htmlFor="requirements" className="block text-sm font-medium text-gray-700 mb-2">
+                <FileText className="inline h-4 w-4 mr-1" />
                 Special Requirements
               </label>
               <textarea
                 id="requirements"
+                name="requirements"
                 value={formData.requirements}
                 onChange={handleChange}
+                disabled={isSubmitting}
                 rows={4}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                placeholder="Tell us about any special requirements, themes, or preferences for your event..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed resize-vertical"
+                placeholder="Tell us about any specific requirements, themes, or preferences for your event..."
               />
-            </motion.div>
+            </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-end gap-4 pt-4">
-              <motion.button
+            <div className="flex space-x-4">
+              <button
                 type="button"
                 onClick={handleClose}
                 disabled={isSubmitting}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-700 transition-colors disabled:opacity-50"
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 Cancel
-              </motion.button>
-              <motion.button
+              </button>
+              <button
                 type="submit"
-                disabled={isSubmitting}
-                whileHover={{ scale: isSubmitting ? 1 : 1.05 }}
-                whileTap={{ scale: isSubmitting ? 1 : 0.95 }}
-                className={`px-8 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center gap-2 ${
-                  submitStatus === 'success'
-                    ? 'bg-green-600 text-white'
-                    : submitStatus === 'error'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white'
-                } ${isSubmitting ? 'opacity-75 cursor-not-allowed' : ''}`}
+                disabled={isSubmitting || submitStatus === 'success'}
+                className="flex-1 bg-orange-500 text-white py-3 px-6 rounded-md hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader className="w-5 h-5 animate-spin" />
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                     <span>Submitting...</span>
                   </>
                 ) : submitStatus === 'success' ? (
                   <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Submitted!</span>
-                  </>
-                ) : submitStatus === 'error' ? (
-                  <>
-                    <AlertCircle className="w-5 h-5" />
-                    <span>Try Again</span>
+                    <CheckCircle className="h-5 w-5" />
+                    <span>Submitted</span>
                   </>
                 ) : (
                   <>
-                    <Calendar className="w-5 h-5" />
+                    <Send className="h-5 w-5" />
                     <span>Submit Request</span>
                   </>
                 )}
-              </motion.button>
+              </button>
             </div>
           </form>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        </div>
+      </div>
+    </div>
   );
-}
+};
+
+export default EventPlanningModal;

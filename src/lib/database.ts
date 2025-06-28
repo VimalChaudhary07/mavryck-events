@@ -1,623 +1,391 @@
-import { supabase, handleSupabaseError } from './supabase';
-import type { 
-  EventRequest, 
-  ContactMessage, 
-  GalleryItem, 
-  Product, 
-  Testimonial,
-  EventRequestInsert,
-  ContactMessageInsert,
-  GalleryItemInsert,
-  ProductInsert,
-  TestimonialInsert
-} from '../types/supabase';
+import { supabase } from './supabase';
+import type { Database } from '../types/supabase';
 
-// Helper function for anonymous operations (no auth required)
-async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
+type Tables = Database['public']['Tables'];
+type ContactMessage = Tables['contact_messages']['Insert'];
+type EventRequest = Tables['event_requests']['Insert'];
+type GalleryItem = Tables['gallery']['Row'];
+type Product = Tables['products']['Row'];
+type Testimonial = Tables['testimonials']['Row'];
+
+// Enhanced error handling for database operations
+export const handleDatabaseError = (error: any, operation: string) => {
+  console.error(`Database ${operation} error:`, error);
+  
+  if (error?.code === '42501') {
+    throw new Error(`Permission denied: ${error.message}`);
+  }
+  
+  if (error?.code === 'PGRST116') {
+    throw new Error('The result contains 0 rows');
+  }
+  
+  throw new Error(error?.message || `Failed to ${operation}`);
+};
+
+// Wrapper for anonymous access operations
+export const withAnonymousAccess = async <T>(
+  operation: () => Promise<T>
+): Promise<T> => {
   try {
-    // For anonymous operations, ensure we're not using any authenticated session
-    // that might interfere with the anonymous policies
-    const { data: currentSession } = await supabase.auth.getSession();
-    
-    if (currentSession.session) {
-      console.log('Temporarily clearing session for anonymous operation');
-      // Store the current session
-      const sessionToRestore = currentSession.session;
-      
-      try {
-        // Clear the session for anonymous operation
-        await supabase.auth.signOut();
-        
-        // Perform the operation
-        const result = await operation();
-        
-        // Restore the session if it was an admin session
-        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
-          console.log('Restoring admin session after anonymous operation');
-          // Note: In a real app, you'd want to handle session restoration more carefully
-        }
-        
-        return result;
-      } catch (operationError) {
-        // If operation fails, try to restore session anyway
-        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
-          try {
-            // Attempt to restore session - this might not work perfectly
-            // but it's better than leaving the user logged out
-            console.log('Attempting to restore session after failed operation');
-          } catch (restoreError) {
-            console.warn('Could not restore session:', restoreError);
-          }
-        }
-        throw operationError;
-      }
-    } else {
-      // No session to worry about, just execute the operation
-      return await operation();
-    }
+    return await operation();
   } catch (error: any) {
-    console.error('Anonymous operation failed:', error);
-    
-    // Provide user-friendly error messages
-    if (error?.code === '42501') {
-      if (error?.message?.includes('contact_messages')) {
-        throw new Error('Unable to send message. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
-      }
-      if (error?.message?.includes('event_requests')) {
-        throw new Error('Unable to submit event request. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
-      }
-      throw new Error('Permission denied. Please try refreshing the page or contact us directly.');
-    }
-    
-    throw error;
+    console.error('Anonymous access error:', error);
+    handleDatabaseError(error, 'perform anonymous operation');
+    throw error; // This line won't be reached due to handleDatabaseError throwing
   }
-}
-
-// Helper function for authenticated operations with better error handling
-async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
-  let retries = 3;
-  
-  while (retries > 0) {
-    try {
-      // Check if we have a valid session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw new Error('Authentication session error. Please log in again.');
-      }
-      
-      if (!sessionData.session) {
-        console.warn('No active session found, attempting to refresh...');
-        
-        // Try to refresh the session
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError || !refreshData.session) {
-          throw new Error('Authentication required. Please log in again.');
-        }
-      }
-      
-      return await operation();
-    } catch (error: any) {
-      console.error(`Database operation failed (${retries} retries left):`, error);
-      
-      if (retries === 1 || error?.message?.includes('Authentication')) {
-        throw error;
-      }
-      
-      retries--;
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-  
-  throw new Error('Operation failed after multiple retries');
-}
-
-// Event Requests
-export async function createEventRequest(data: EventRequestInsert): Promise<EventRequest> {
-  return withAnonymousAccess(async () => {
-    console.log('Creating event request with anonymous access:', data);
-    
-    // Validate required fields
-    if (!data.name || !data.email || !data.phone || !data.event_type || !data.event_date || !data.guest_count) {
-      throw new Error('All required fields must be provided');
-    }
-    
-    const { data: result, error } = await supabase
-      .from('event_requests')
-      .insert({
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        phone: data.phone.trim(),
-        event_type: data.event_type,
-        event_date: data.event_date,
-        guest_count: data.guest_count,
-        requirements: data.requirements?.trim() || '',
-        status: data.status || 'pending'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Event request creation error:', error);
-      handleSupabaseError(error);
-    }
-    
-    if (!result) {
-      throw new Error('Failed to create event request - no data returned');
-    }
-    
-    console.log('Event request created successfully:', result);
-    return result;
-  });
-}
-
-export async function getEventRequests(): Promise<EventRequest[]> {
-  try {
-    const { data, error } = await supabase
-      .from('event_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Failed to fetch event requests:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('Failed to fetch event requests:', error);
-    return [];
-  }
-}
-
-export async function updateEventRequest(id: string, updates: Partial<EventRequest>): Promise<EventRequest> {
-  return withAuth(async () => {
-    console.log('Updating event request:', id, updates);
-    
-    const { data, error } = await supabase
-      .from('event_requests')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Event request update error:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data;
-  });
-}
-
-export async function deleteEventRequest(id: string): Promise<void> {
-  return withAuth(async () => {
-    console.log('Deleting event request:', id);
-    
-    const { error } = await supabase
-      .from('event_requests')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Event request deletion error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Event request deleted successfully');
-  });
-}
+};
 
 // Contact Messages
-export async function createContactMessage(data: ContactMessageInsert): Promise<ContactMessage> {
+export const createContactMessage = async (message: ContactMessage) => {
   return withAnonymousAccess(async () => {
-    console.log('Creating contact message with anonymous access:', data);
+    console.log('Creating contact message:', message);
     
-    // Validate required fields
-    if (!data.name || !data.email || !data.message) {
-      throw new Error('Name, email, and message are required');
-    }
-    
-    const { data: result, error } = await supabase
+    // Use the anon client explicitly for public operations
+    const { data, error } = await supabase
       .from('contact_messages')
-      .insert({
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        message: data.message.trim(),
-        viewed: data.viewed || false
-      })
+      .insert([{
+        name: message.name,
+        email: message.email,
+        message: message.message,
+        viewed: false
+      }])
       .select()
       .single();
 
     if (error) {
       console.error('Contact message creation error:', error);
-      handleSupabaseError(error);
+      throw error;
     }
-    
-    if (!result) {
-      throw new Error('Failed to create contact message - no data returned');
-    }
-    
-    console.log('Contact message created successfully:', result);
-    return result;
-  });
-}
 
-export async function getContactMessages(): Promise<ContactMessage[]> {
-  try {
-    const { data, error } = await supabase
-      .from('contact_messages')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Failed to fetch contact messages:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('Failed to fetch contact messages:', error);
-    return [];
-  }
-}
-
-export async function updateContactMessage(id: string, updates: Partial<ContactMessage>): Promise<ContactMessage> {
-  return withAuth(async () => {
-    console.log('Updating contact message:', id, updates);
-    
-    const { data, error } = await supabase
-      .from('contact_messages')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Contact message update error:', error);
-      handleSupabaseError(error);
-    }
-    
+    console.log('Contact message created successfully:', data);
     return data;
   });
-}
+};
 
-export async function deleteContactMessage(id: string): Promise<void> {
-  return withAuth(async () => {
-    console.log('Deleting contact message:', id);
-    
-    const { error } = await supabase
-      .from('contact_messages')
-      .delete()
-      .eq('id', id);
+export const getContactMessages = async () => {
+  const { data, error } = await supabase
+    .from('contact_messages')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Contact message deletion error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Contact message deleted successfully');
-  });
-}
-
-// Gallery Items
-export async function createGalleryItem(data: GalleryItemInsert): Promise<GalleryItem> {
-  return withAuth(async () => {
-    console.log('Creating gallery item:', data);
-    
-    const { data: result, error } = await supabase
-      .from('gallery')
-      .insert(data)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Gallery item creation error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Gallery item created successfully:', result);
-    return result;
-  });
-}
-
-export async function getGalleryItems(): Promise<GalleryItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from('gallery')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Failed to fetch gallery items:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('Failed to fetch gallery items:', error);
-    return [];
+  if (error) {
+    handleDatabaseError(error, 'fetch contact messages');
   }
-}
 
-export async function updateGalleryItem(id: string, updates: Partial<GalleryItem>): Promise<GalleryItem> {
-  return withAuth(async () => {
-    console.log('Updating gallery item:', id, updates);
+  return data || [];
+};
+
+export const markMessageAsViewed = async (id: string) => {
+  const { data, error } = await supabase
+    .from('contact_messages')
+    .update({ viewed: true })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'mark message as viewed');
+  }
+
+  return data;
+};
+
+export const deleteContactMessage = async (id: string) => {
+  const { data, error } = await supabase
+    .from('contact_messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'delete contact message');
+  }
+
+  return data;
+};
+
+// Event Requests
+export const createEventRequest = async (request: EventRequest) => {
+  return withAnonymousAccess(async () => {
+    console.log('Creating event request:', request);
     
+    // Use the anon client explicitly for public operations
     const { data, error } = await supabase
-      .from('gallery')
-      .update(updates)
-      .eq('id', id)
+      .from('event_requests')
+      .insert([{
+        name: request.name,
+        email: request.email,
+        phone: request.phone,
+        event_type: request.event_type,
+        event_date: request.event_date,
+        guest_count: request.guest_count,
+        requirements: request.requirements || '',
+        status: 'pending'
+      }])
       .select()
       .single();
 
     if (error) {
-      console.error('Gallery item update error:', error);
-      handleSupabaseError(error);
+      console.error('Event request creation error:', error);
+      throw error;
     }
-    
-    if (!data) throw new Error('Gallery item not found');
+
+    console.log('Event request created successfully:', data);
     return data;
   });
-}
+};
 
-export async function deleteGalleryItem(id: string): Promise<void> {
-  return withAuth(async () => {
-    console.log('Deleting gallery item:', id);
-    
-    const { error } = await supabase
-      .from('gallery')
-      .delete()
-      .eq('id', id);
+export const getEventRequests = async () => {
+  const { data, error } = await supabase
+    .from('event_requests')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Gallery item deletion error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Gallery item deleted successfully');
-  });
-}
+  if (error) {
+    handleDatabaseError(error, 'fetch event requests');
+  }
+
+  return data || [];
+};
+
+export const updateEventRequestStatus = async (id: string, status: string) => {
+  const { data, error } = await supabase
+    .from('event_requests')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'update event request status');
+  }
+
+  return data;
+};
+
+export const deleteEventRequest = async (id: string) => {
+  const { data, error } = await supabase
+    .from('event_requests')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'delete event request');
+  }
+
+  return data;
+};
+
+// Gallery
+export const getGalleryItems = async (): Promise<GalleryItem[]> => {
+  const { data, error } = await supabase
+    .from('gallery')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    handleDatabaseError(error, 'fetch gallery items');
+  }
+
+  return data || [];
+};
+
+export const createGalleryItem = async (item: Omit<GalleryItem, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+  const { data, error } = await supabase
+    .from('gallery')
+    .insert([item])
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'create gallery item');
+  }
+
+  return data;
+};
+
+export const updateGalleryItem = async (id: string, updates: Partial<GalleryItem>) => {
+  const { data, error } = await supabase
+    .from('gallery')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'update gallery item');
+  }
+
+  return data;
+};
+
+export const deleteGalleryItem = async (id: string) => {
+  const { data, error } = await supabase
+    .from('gallery')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'delete gallery item');
+  }
+
+  return data;
+};
 
 // Products
-export async function createProduct(data: ProductInsert): Promise<Product> {
-  return withAuth(async () => {
-    console.log('Creating product:', data);
-    
-    const { data: result, error } = await supabase
-      .from('products')
-      .insert(data)
-      .select()
-      .single();
+export const getProducts = async (): Promise<Product[]> => {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Product creation error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Product created successfully:', result);
-    return result;
-  });
-}
-
-export async function getProducts(): Promise<Product[]> {
-  try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Failed to fetch products:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('Failed to fetch products:', error);
-    return [];
+  if (error) {
+    handleDatabaseError(error, 'fetch products');
   }
-}
 
-export async function updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-  return withAuth(async () => {
-    console.log('Updating product:', id, updates);
-    
-    const { data, error } = await supabase
-      .from('products')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+  return data || [];
+};
 
-    if (error) {
-      console.error('Product update error:', error);
-      handleSupabaseError(error);
-    }
-    
-    if (!data) throw new Error('Product not found');
-    return data;
-  });
-}
+export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+  const { data, error } = await supabase
+    .from('products')
+    .insert([product])
+    .select()
+    .single();
 
-export async function deleteProduct(id: string): Promise<void> {
-  return withAuth(async () => {
-    console.log('Deleting product:', id);
-    
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+  if (error) {
+    handleDatabaseError(error, 'create product');
+  }
 
-    if (error) {
-      console.error('Product deletion error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Product deleted successfully');
-  });
-}
+  return data;
+};
+
+export const updateProduct = async (id: string, updates: Partial<Product>) => {
+  const { data, error } = await supabase
+    .from('products')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'update product');
+  }
+
+  return data;
+};
+
+export const deleteProduct = async (id: string) => {
+  const { data, error } = await supabase
+    .from('products')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'delete product');
+  }
+
+  return data;
+};
 
 // Testimonials
-export async function createTestimonial(data: TestimonialInsert): Promise<Testimonial> {
-  return withAuth(async () => {
-    console.log('Creating testimonial:', data);
-    
-    const { data: result, error } = await supabase
-      .from('testimonials')
-      .insert(data)
-      .select()
-      .single();
+export const getTestimonials = async (): Promise<Testimonial[]> => {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Testimonial creation error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Testimonial created successfully:', result);
-    return result;
-  });
-}
-
-export async function getTestimonials(): Promise<Testimonial[]> {
-  try {
-    const { data, error } = await supabase
-      .from('testimonials')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Failed to fetch testimonials:', error);
-      handleSupabaseError(error);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('Failed to fetch testimonials:', error);
-    return [];
+  if (error) {
+    handleDatabaseError(error, 'fetch testimonials');
   }
-}
 
-export async function updateTestimonial(id: string, updates: Partial<Testimonial>): Promise<Testimonial> {
-  return withAuth(async () => {
-    console.log('Updating testimonial:', id, updates);
-    
-    const { data, error } = await supabase
-      .from('testimonials')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+  return data || [];
+};
 
-    if (error) {
-      console.error('Testimonial update error:', error);
-      handleSupabaseError(error);
-    }
-    
-    if (!data) throw new Error('Testimonial not found');
-    return data;
-  });
-}
+export const createTestimonial = async (testimonial: Omit<Testimonial, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .insert([testimonial])
+    .select()
+    .single();
 
-export async function deleteTestimonial(id: string): Promise<void> {
-  return withAuth(async () => {
-    console.log('Deleting testimonial:', id);
-    
-    const { error } = await supabase
-      .from('testimonials')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Testimonial deletion error:', error);
-      handleSupabaseError(error);
-    }
-    
-    console.log('Testimonial deleted successfully');
-  });
-}
-
-// Health check function
-export async function testDatabaseConnection(): Promise<boolean> {
-  try {
-    const { error } = await supabase.from('event_requests').select('count', { count: 'exact', head: true });
-    return !error;
-  } catch (error) {
-    console.error('Database connection test failed:', error);
-    return false;
+  if (error) {
+    handleDatabaseError(error, 'create testimonial');
   }
-}
 
-// Test anonymous access function
-export async function testAnonymousAccess(): Promise<{ canInsertContact: boolean; canInsertEvent: boolean }> {
-  try {
-    // Test contact message insertion
-    let canInsertContact = false;
-    try {
-      const testContact = {
-        name: 'Test User',
-        email: 'test@example.com',
-        message: 'Test message for anonymous access verification'
-      };
-      
-      const { error: contactError } = await supabase
-        .from('contact_messages')
-        .insert(testContact)
-        .select()
-        .single();
-        
-      canInsertContact = !contactError;
-      
-      // Clean up test data if successful
-      if (canInsertContact) {
-        await supabase
-          .from('contact_messages')
-          .delete()
-          .eq('email', 'test@example.com')
-          .eq('message', 'Test message for anonymous access verification');
-      }
-    } catch (error) {
-      console.warn('Contact message test failed:', error);
-    }
-    
-    // Test event request insertion
-    let canInsertEvent = false;
-    try {
-      const testEvent = {
-        name: 'Test User',
-        email: 'test@example.com',
-        phone: '+1234567890',
-        event_type: 'corporate',
-        event_date: new Date().toISOString().split('T')[0],
-        guest_count: '50'
-      };
-      
-      const { error: eventError } = await supabase
-        .from('event_requests')
-        .insert(testEvent)
-        .select()
-        .single();
-        
-      canInsertEvent = !eventError;
-      
-      // Clean up test data if successful
-      if (canInsertEvent) {
-        await supabase
-          .from('event_requests')
-          .delete()
-          .eq('email', 'test@example.com')
-          .eq('phone', '+1234567890');
-      }
-    } catch (error) {
-      console.warn('Event request test failed:', error);
-    }
-    
-    return { canInsertContact, canInsertEvent };
-  } catch (error) {
-    console.error('Anonymous access test failed:', error);
-    return { canInsertContact: false, canInsertEvent: false };
+  return data;
+};
+
+export const updateTestimonial = async (id: string, updates: Partial<Testimonial>) => {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'update testimonial');
   }
-}
+
+  return data;
+};
+
+export const deleteTestimonial = async (id: string) => {
+  const { data, error } = await supabase
+    .from('testimonials')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    handleDatabaseError(error, 'delete testimonial');
+  }
+
+  return data;
+};
+
+// Search functionality
+export const searchContactMessages = async (query: string) => {
+  const { data, error } = await supabase
+    .from('contact_messages')
+    .select('*')
+    .textSearch('search_vector', query)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    handleDatabaseError(error, 'search contact messages');
+  }
+
+  return data || [];
+};
+
+export const searchEventRequests = async (query: string) => {
+  const { data, error } = await supabase
+    .from('event_requests')
+    .select('*')
+    .textSearch('search_vector', query)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    handleDatabaseError(error, 'search event requests');
+  }
+
+  return data || [];
+};
