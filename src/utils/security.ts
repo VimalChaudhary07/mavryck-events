@@ -90,11 +90,11 @@ export const sanitizeInput = (input: string): string => {
     .trim()
     .replace(/[<>\"'&]/g, (match) => {
       const entities: { [key: string]: string } = {
-        '<': '<',
-        '>': '>',
-        '"': '"',
-        "'": ''',
-        '&': '&'
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+        '&': '&amp;'
       };
       return entities[match] || match;
     });
