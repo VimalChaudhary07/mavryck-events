@@ -1,4 +1,5 @@
-// Input validation utilities
+// Production-ready input validation utilities
+
 export const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email.trim().toLowerCase());
@@ -57,61 +58,6 @@ export const sanitizeHTML = (html: string): string => {
 export const sanitizeFileName = (fileName: string): string => {
   return fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
 };
-
-// Rate limiting utilities
-export interface RateLimitConfig {
-  maxAttempts: number;
-  windowMs: number;
-}
-
-export class RateLimiter {
-  private attempts: Map<string, number[]> = new Map();
-
-  constructor(private config: RateLimitConfig) {}
-
-  isAllowed(identifier: string): boolean {
-    const now = Date.now();
-    const windowStart = now - this.config.windowMs;
-    
-    // Get existing attempts for this identifier
-    const userAttempts = this.attempts.get(identifier) || [];
-    
-    // Filter out attempts outside the window
-    const recentAttempts = userAttempts.filter(time => time > windowStart);
-    
-    // Update the attempts list
-    this.attempts.set(identifier, recentAttempts);
-    
-    // Check if under the limit
-    return recentAttempts.length < this.config.maxAttempts;
-  }
-
-  recordAttempt(identifier: string): void {
-    const now = Date.now();
-    const userAttempts = this.attempts.get(identifier) || [];
-    userAttempts.push(now);
-    this.attempts.set(identifier, userAttempts);
-  }
-
-  getRemainingAttempts(identifier: string): number {
-    const now = Date.now();
-    const windowStart = now - this.config.windowMs;
-    const userAttempts = this.attempts.get(identifier) || [];
-    const recentAttempts = userAttempts.filter(time => time > windowStart);
-    
-    return Math.max(0, this.config.maxAttempts - recentAttempts.length);
-  }
-
-  getTimeUntilReset(identifier: string): number {
-    const userAttempts = this.attempts.get(identifier) || [];
-    if (userAttempts.length === 0) return 0;
-    
-    const oldestAttempt = Math.min(...userAttempts);
-    const resetTime = oldestAttempt + this.config.windowMs;
-    
-    return Math.max(0, resetTime - Date.now());
-  }
-}
 
 // Form validation schemas
 export interface ValidationRule {
