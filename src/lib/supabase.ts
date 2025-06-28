@@ -39,8 +39,8 @@ supabase.from('event_requests').select('count', { count: 'exact', head: true })
   });
 
 // Helper function to handle Supabase errors
-export function handleSupabaseError(error: any) {
-  console.error('Supabase error details:', {
+export function handleSupabaseError(error: any, operation: string = 'operation') {
+  console.error(`Supabase ${operation} error details:`, {
     message: error?.message,
     code: error?.code,
     details: error?.details,
@@ -79,7 +79,7 @@ export function handleSupabaseError(error: any) {
     throw new Error(error.message);
   }
   
-  throw new Error('An unexpected database error occurred');
+  throw new Error(`An unexpected database error occurred during ${operation}`);
 }
 
 // Helper function for authenticated operations with retry logic
@@ -159,3 +159,17 @@ export async function ensureAnonymousAccess(): Promise<void> {
     // Continue anyway, as this is just a cleanup operation
   }
 }
+
+// Helper function to get current user
+export const getCurrentUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+// Helper function to check if user is authenticated
+export const isUserAuthenticated = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return !!session;
+};
+
+export default supabase;

@@ -12,74 +12,40 @@ import type {
   TestimonialInsert
 } from '../types/supabase';
 
-// Helper function for anonymous operations (no auth required)
-async function withAnonymousAccess<T>(operation: () => Promise<T>): Promise<T> {
+// Enhanced error handling for database operations
+const handleDatabaseError = (error: any, operation: string) => {
+  console.error(`Database ${operation} error:`, error);
+  
+  if (error?.code === '42501') {
+    throw new Error(`Permission denied: ${error.message}`);
+  }
+  
+  if (error?.code === 'PGRST116') {
+    throw new Error('The result contains 0 rows');
+  }
+  
+  throw new Error(error?.message || `Failed to ${operation}`);
+};
+
+// Wrapper for anonymous access operations (public forms)
+const withAnonymousAccess = async <T>(
+  operation: () => Promise<T>
+): Promise<T> => {
   try {
-    // For anonymous operations, ensure we're not using any authenticated session
-    // that might interfere with the anonymous policies
-    const { data: currentSession } = await supabase.auth.getSession();
-    
-    if (currentSession.session) {
-      console.log('Temporarily clearing session for anonymous operation');
-      // Store the current session
-      const sessionToRestore = currentSession.session;
-      
-      try {
-        // Clear the session for anonymous operation
-        await supabase.auth.signOut();
-        
-        // Perform the operation
-        const result = await operation();
-        
-        // Restore the session if it was an admin session
-        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
-          console.log('Restoring admin session after anonymous operation');
-          // Note: In a real app, you'd want to handle session restoration more carefully
-        }
-        
-        return result;
-      } catch (operationError) {
-        // If operation fails, try to restore session anyway
-        if (sessionToRestore.user?.email === 'admin@mavryckevents.com') {
-          try {
-            // Attempt to restore session - this might not work perfectly
-            // but it's better than leaving the user logged out
-            console.log('Attempting to restore session after failed operation');
-          } catch (restoreError) {
-            console.warn('Could not restore session:', restoreError);
-          }
-        }
-        throw operationError;
-      }
-    } else {
-      // No session to worry about, just execute the operation
-      return await operation();
-    }
+    return await operation();
   } catch (error: any) {
-    console.error('Anonymous operation failed:', error);
-    
-    // Provide user-friendly error messages
-    if (error?.code === '42501') {
-      if (error?.message?.includes('contact_messages')) {
-        throw new Error('Unable to send message. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
-      }
-      if (error?.message?.includes('event_requests')) {
-        throw new Error('Unable to submit event request. Please try refreshing the page or contact us directly at mavryckevents@gmail.com');
-      }
-      throw new Error('Permission denied. Please try refreshing the page or contact us directly.');
-    }
-    
+    console.error('Anonymous access error:', error);
+    handleDatabaseError(error, 'perform anonymous operation');
     throw error;
   }
-}
+};
 
-// Helper function for authenticated operations with better error handling
-async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
+// Wrapper for authenticated operations
+const withAuth = async <T>(operation: () => Promise<T>): Promise<T> => {
   let retries = 3;
   
   while (retries > 0) {
     try {
-      // Check if we have a valid session
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
@@ -90,7 +56,6 @@ async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
       if (!sessionData.session) {
         console.warn('No active session found, attempting to refresh...');
         
-        // Try to refresh the session
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
         
         if (refreshError || !refreshData.session) {
@@ -107,13 +72,12 @@ async function withAuth<T>(operation: () => Promise<T>): Promise<T> {
       }
       
       retries--;
-      // Wait before retry
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
   throw new Error('Operation failed after multiple retries');
-}
+};
 
 // Event Requests
 export async function createEventRequest(data: EventRequestInsert): Promise<EventRequest> {
@@ -142,7 +106,7 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
 
     if (error) {
       console.error('Event request creation error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'create event request');
     }
     
     if (!result) {
@@ -155,22 +119,20 @@ export async function createEventRequest(data: EventRequestInsert): Promise<Even
 }
 
 export async function getEventRequests(): Promise<EventRequest[]> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('event_requests')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch event requests:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'fetch event requests');
     }
     
     return data || [];
-  } catch (error) {
-    console.error('Failed to fetch event requests:', error);
-    return [];
-  }
+  });
 }
 
 export async function updateEventRequest(id: string, updates: Partial<EventRequest>): Promise<EventRequest> {
@@ -186,7 +148,7 @@ export async function updateEventRequest(id: string, updates: Partial<EventReque
 
     if (error) {
       console.error('Event request update error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'update event request');
     }
     
     return data;
@@ -195,16 +157,16 @@ export async function updateEventRequest(id: string, updates: Partial<EventReque
 
 export async function deleteEventRequest(id: string): Promise<void> {
   return withAuth(async () => {
-    console.log('Deleting event request:', id);
+    console.log('Soft deleting event request:', id);
     
     const { error } = await supabase
       .from('event_requests')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {
       console.error('Event request deletion error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'delete event request');
     }
     
     console.log('Event request deleted successfully');
@@ -234,7 +196,7 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
 
     if (error) {
       console.error('Contact message creation error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'create contact message');
     }
     
     if (!result) {
@@ -247,22 +209,20 @@ export async function createContactMessage(data: ContactMessageInsert): Promise<
 }
 
 export async function getContactMessages(): Promise<ContactMessage[]> {
-  try {
+  return withAuth(async () => {
     const { data, error } = await supabase
       .from('contact_messages')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch contact messages:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'fetch contact messages');
     }
     
     return data || [];
-  } catch (error) {
-    console.error('Failed to fetch contact messages:', error);
-    return [];
-  }
+  });
 }
 
 export async function updateContactMessage(id: string, updates: Partial<ContactMessage>): Promise<ContactMessage> {
@@ -278,7 +238,7 @@ export async function updateContactMessage(id: string, updates: Partial<ContactM
 
     if (error) {
       console.error('Contact message update error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'update contact message');
     }
     
     return data;
@@ -287,16 +247,16 @@ export async function updateContactMessage(id: string, updates: Partial<ContactM
 
 export async function deleteContactMessage(id: string): Promise<void> {
   return withAuth(async () => {
-    console.log('Deleting contact message:', id);
+    console.log('Soft deleting contact message:', id);
     
     const { error } = await supabase
       .from('contact_messages')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {
       console.error('Contact message deletion error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'delete contact message');
     }
     
     console.log('Contact message deleted successfully');
@@ -316,7 +276,7 @@ export async function createGalleryItem(data: GalleryItemInsert): Promise<Galler
 
     if (error) {
       console.error('Gallery item creation error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'create gallery item');
     }
     
     console.log('Gallery item created successfully:', result);
@@ -329,11 +289,12 @@ export async function getGalleryItems(): Promise<GalleryItem[]> {
     const { data, error } = await supabase
       .from('gallery')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch gallery items:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'fetch gallery items');
     }
     
     return data || [];
@@ -356,7 +317,7 @@ export async function updateGalleryItem(id: string, updates: Partial<GalleryItem
 
     if (error) {
       console.error('Gallery item update error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'update gallery item');
     }
     
     if (!data) throw new Error('Gallery item not found');
@@ -366,16 +327,16 @@ export async function updateGalleryItem(id: string, updates: Partial<GalleryItem
 
 export async function deleteGalleryItem(id: string): Promise<void> {
   return withAuth(async () => {
-    console.log('Deleting gallery item:', id);
+    console.log('Soft deleting gallery item:', id);
     
     const { error } = await supabase
       .from('gallery')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {
       console.error('Gallery item deletion error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'delete gallery item');
     }
     
     console.log('Gallery item deleted successfully');
@@ -395,7 +356,7 @@ export async function createProduct(data: ProductInsert): Promise<Product> {
 
     if (error) {
       console.error('Product creation error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'create product');
     }
     
     console.log('Product created successfully:', result);
@@ -408,11 +369,12 @@ export async function getProducts(): Promise<Product[]> {
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch products:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'fetch products');
     }
     
     return data || [];
@@ -435,7 +397,7 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
 
     if (error) {
       console.error('Product update error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'update product');
     }
     
     if (!data) throw new Error('Product not found');
@@ -445,16 +407,16 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
 
 export async function deleteProduct(id: string): Promise<void> {
   return withAuth(async () => {
-    console.log('Deleting product:', id);
+    console.log('Soft deleting product:', id);
     
     const { error } = await supabase
       .from('products')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {
       console.error('Product deletion error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'delete product');
     }
     
     console.log('Product deleted successfully');
@@ -474,7 +436,7 @@ export async function createTestimonial(data: TestimonialInsert): Promise<Testim
 
     if (error) {
       console.error('Testimonial creation error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'create testimonial');
     }
     
     console.log('Testimonial created successfully:', result);
@@ -487,11 +449,12 @@ export async function getTestimonials(): Promise<Testimonial[]> {
     const { data, error } = await supabase
       .from('testimonials')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch testimonials:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'fetch testimonials');
     }
     
     return data || [];
@@ -514,7 +477,7 @@ export async function updateTestimonial(id: string, updates: Partial<Testimonial
 
     if (error) {
       console.error('Testimonial update error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'update testimonial');
     }
     
     if (!data) throw new Error('Testimonial not found');
@@ -524,19 +487,54 @@ export async function updateTestimonial(id: string, updates: Partial<Testimonial
 
 export async function deleteTestimonial(id: string): Promise<void> {
   return withAuth(async () => {
-    console.log('Deleting testimonial:', id);
+    console.log('Soft deleting testimonial:', id);
     
     const { error } = await supabase
       .from('testimonials')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {
       console.error('Testimonial deletion error:', error);
-      handleSupabaseError(error);
+      handleSupabaseError(error, 'delete testimonial');
     }
     
     console.log('Testimonial deleted successfully');
+  });
+}
+
+// Search functionality
+export async function searchContactMessages(query: string): Promise<ContactMessage[]> {
+  return withAuth(async () => {
+    const { data, error } = await supabase
+      .from('contact_messages')
+      .select('*')
+      .textSearch('search_vector', query)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      handleDatabaseError(error, 'search contact messages');
+    }
+    
+    return data || [];
+  });
+}
+
+export async function searchEventRequests(query: string): Promise<EventRequest[]> {
+  return withAuth(async () => {
+    const { data, error } = await supabase
+      .from('event_requests')
+      .select('*')
+      .textSearch('search_vector', query)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      handleDatabaseError(error, 'search event requests');
+    }
+    
+    return data || [];
   });
 }
 

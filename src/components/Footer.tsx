@@ -3,6 +3,16 @@ import { Link } from 'react-router-dom';
 import { Calendar, Mail, Phone, Instagram, Facebook, Twitter, Linkedin } from 'lucide-react';
 
 export function Footer() {
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
   return (
     <footer className="bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -40,24 +50,36 @@ export function Footer() {
             <h3 className="text-white font-semibold text-lg mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/" className="text-gray-400 hover:text-orange-500 transition-colors">
+                <button
+                  onClick={() => scrollToSection('hero')}
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-left"
+                >
                   Home
-                </Link>
+                </button>
               </li>
               <li>
-                <Link to="/services" className="text-gray-400 hover:text-orange-500 transition-colors">
+                <button
+                  onClick={() => scrollToSection('services')}
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-left"
+                >
                   Services
-                </Link>
+                </button>
               </li>
               <li>
-                <Link to="/gallery" className="text-gray-400 hover:text-orange-500 transition-colors">
+                <button
+                  onClick={() => scrollToSection('gallery')}
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-left"
+                >
                   Gallery
-                </Link>
+                </button>
               </li>
               <li>
-                <Link to="/contact" className="text-gray-400 hover:text-orange-500 transition-colors">
+                <button
+                  onClick={() => scrollToSection('contact')}
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-left"
+                >
                   Contact
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
@@ -90,7 +112,7 @@ export function Footer() {
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-orange-500 transition-colors"
                 >
-                  @mavryck_event
+                  @mavryck_events
                 </a>
               </li>
             </ul>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
+import { Settings, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 import { 
   getEventRequests, 
   getContactMessages, 
@@ -30,29 +31,21 @@ interface RestoreProgress {
   errors: string[];
 }
 
+interface SiteSettings {
+  id?: string;
+  google_photos_url: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export function AdminSettings() {
-  const [activeSection, setActiveSection] = useState('business');
+  const [activeSection, setActiveSection] = useState('gallery');
   const [isLoading, setIsLoading] = useState(false);
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
   const [settings, setSettings] = useState({
-    business: {
-      hours: {
-        monday: { open: '07:00', close: '19:00' },
-        tuesday: { open: '07:00', close: '19:00' },
-        wednesday: { open: '07:00', close: '19:00' },
-        thursday: { open: '07:00', close: '19:00' },
-        friday: { open: '07:00', close: '19:00' },
-        saturday: { open: '07:00', close: '19:00' },
-        sunday: { open: '07:00', close: '19:00' },
-      },
-      contact: {
-        email: 'contact@festive.finesse.events',
-        phone: '+91 1234567890',
-        address: '123 Event Street, City, State, India',
-        website: 'https://festive.finesse.events',
-        googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
-      }
+    gallery: {
+      googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
     },
     security: {
       currentPassword: '',
@@ -60,22 +53,150 @@ export function AdminSettings() {
       confirmPassword: ''
     }
   });
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
+    loadSettings();
+    checkDatabaseConnection();
   }, []);
+
+  const checkDatabaseConnection = async () => {
+    try {
+      setDbConnectionStatus('checking');
+      const { error } = await supabase.from('site_settings').select('count', { count: 'exact', head: true });
+      setDbConnectionStatus(error ? 'error' : 'connected');
+    } catch (error) {
+      console.error('Database connection check failed:', error);
+      setDbConnectionStatus('error');
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      console.log('Loading settings from database...');
+      
+      // Always try to load from database first
+      const { data: dbSettings, error } = await supabase
+        .from('site_settings')
+        .select('*')
+        .single();
+
+      if (dbSettings && !error) {
+        console.log('Settings loaded from database:', dbSettings);
+        setSettings(prev => ({
+          ...prev,
+          gallery: {
+            googlePhotosUrl: dbSettings.google_photos_url || prev.gallery.googlePhotosUrl
+          }
+        }));
+        setDbConnectionStatus('connected');
+      } else {
+        console.log('No settings found in database, checking localStorage...');
+        
+        // Fallback to localStorage for backward compatibility
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+          try {
+            const parsedSettings = JSON.parse(savedSettings);
+            setSettings(prev => ({
+              ...prev,
+              gallery: {
+                googlePhotosUrl: parsedSettings.business?.contact?.googlePhotosUrl || prev.gallery.googlePhotosUrl
+              }
+            }));
+            console.log('Settings loaded from localStorage');
+          } catch (error) {
+            console.error('Failed to parse localStorage settings:', error);
+          }
+        }
+        setDbConnectionStatus('error');
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      setDbConnectionStatus('error');
+    }
+  };
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
+    let savedToDatabase = false;
+    
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      toast.success('Settings updated successfully');
+      console.log('Saving settings to database...', settings.gallery.googlePhotosUrl);
+      
+      // Always attempt to save to database first
+      const { data: existingSettings } = await supabase
+        .from('site_settings')
+        .select('id')
+        .single();
+
+      const settingsData = {
+        google_photos_url: settings.gallery.googlePhotosUrl
+      };
+
+      if (existingSettings) {
+        // Update existing settings
+        console.log('Updating existing settings in database...');
+        const { error } = await supabase
+          .from('site_settings')
+          .update(settingsData)
+          .eq('id', existingSettings.id);
+
+        if (error) {
+          console.error('Database update error:', error);
+          throw error;
+        }
+        console.log('Settings updated successfully in database');
+      } else {
+        // Create new settings
+        console.log('Creating new settings in database...');
+        const { error } = await supabase
+          .from('site_settings')
+          .insert(settingsData);
+
+        if (error) {
+          console.error('Database insert error:', error);
+          throw error;
+        }
+        console.log('Settings created successfully in database');
+      }
+
+      savedToDatabase = true;
+      setDbConnectionStatus('connected');
+      
+      // Also save to localStorage for backward compatibility
+      const settingsToSave = {
+        business: {
+          contact: {
+            googlePhotosUrl: settings.gallery.googlePhotosUrl
+          }
+        }
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+      console.log('Settings also saved to localStorage for compatibility');
+
+      toast.success('✅ Settings saved successfully to database!');
+      
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      toast.error('Failed to update settings');
+      console.error('Failed to save settings to database:', error);
+      setDbConnectionStatus('error');
+      
+      // Fallback to localStorage only if database fails
+      try {
+        const settingsToSave = {
+          business: {
+            contact: {
+              googlePhotosUrl: settings.gallery.googlePhotosUrl
+            }
+          }
+        };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+        toast.error('⚠️ Database unavailable. Settings saved to local storage only.');
+        console.log('Fallback: Settings saved to localStorage');
+      } catch (localError) {
+        console.error('Failed to save to localStorage:', localError);
+        toast.error('❌ Failed to save settings anywhere!');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -108,31 +229,12 @@ export function AdminSettings() {
     }
   };
 
-  const handleBusinessSettingChange = (section: string, field: string, value: string) => {
+  const handleGooglePhotosUrlChange = (value: string) => {
     setSettings(prev => ({
       ...prev,
-      business: {
-        ...prev.business,
-        [section]: {
-          ...prev.business[section],
-          [field]: value
-        }
-      }
-    }));
-  };
-
-  const handleHoursChange = (day: string, type: 'open' | 'close', value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      business: {
-        ...prev.business,
-        hours: {
-          ...prev.business.hours,
-          [day]: {
-            ...prev.business.hours[day],
-            [type]: value
-          }
-        }
+      gallery: {
+        ...prev.gallery,
+        googlePhotosUrl: value
       }
     }));
   };
@@ -298,6 +400,8 @@ export function AdminSettings() {
         'Total Gallery Items': gallery?.length || 0,
         'Total Products': products?.length || 0,
         'Total Testimonials': testimonials?.length || 0,
+        'Google Photos URL': settings.gallery.googlePhotosUrl,
+        'Database Status': dbConnectionStatus,
         'Backup Version': '2.0',
         'Application': 'Mavryck Events Management System'
       }]);
@@ -543,14 +647,14 @@ export function AdminSettings() {
 
       <div className="flex gap-4 mb-8 flex-wrap">
         <button
-          onClick={() => setActiveSection('business')}
+          onClick={() => setActiveSection('gallery')}
           className={`px-4 py-2 rounded-lg transition-colors ${
-            activeSection === 'business'
+            activeSection === 'gallery'
               ? 'bg-orange-500 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Business Settings
+          Gallery Settings
         </button>
         <button
           onClick={() => setActiveSection('backup')}
@@ -574,89 +678,66 @@ export function AdminSettings() {
         </button>
       </div>
 
-      {activeSection === 'business' ? (
+      {activeSection === 'gallery' ? (
         <div className="space-y-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Business Hours</h3>
+              <ExternalLink className="w-5 h-5 text-orange-500" />
+              <h3 className="text-lg font-medium text-white">Gallery Settings</h3>
             </div>
-            <div className="grid gap-4">
-              {Object.entries(settings.business.hours).map(([day, hours]) => (
-                <div key={day} className="flex items-center gap-4">
-                  <span className="w-32 text-gray-300 capitalize">{day}</span>
-                  <input
-                    type="time"
-                    value={hours.open}
-                    onChange={(e) => handleHoursChange(day, 'open', e.target.value)}
-                    className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                  />
-                  <span className="text-gray-400">to</span>
-                  <input
-                    type="time"
-                    value={hours.close}
-                    onChange={(e) => handleHoursChange(day, 'close', e.target.value)}
-                    className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                  />
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
+              <input
+                type="url"
+                value={settings.gallery.googlePhotosUrl}
+                onChange={(e) => handleGooglePhotosUrlChange(e.target.value)}
+                placeholder="https://photos.google.com/share/your-album-link"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+              <p className="text-sm text-gray-400 mt-1">
+                This URL will be used for the "View More" button in the gallery section
+              </p>
+              
+              {/* Database Status Indicator */}
+              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm text-blue-400 font-medium">Database Storage Status</span>
+                  <div className="flex items-center gap-1">
+                    {dbConnectionStatus === 'checking' && (
+                      <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {dbConnectionStatus === 'connected' && (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    )}
+                    {dbConnectionStatus === 'error' && (
+                      <AlertCircle className="w-4 h-4 text-red-400" />
+                    )}
+                    <span className={`text-xs font-medium ${
+                      dbConnectionStatus === 'connected' ? 'text-green-400' :
+                      dbConnectionStatus === 'error' ? 'text-red-400' : 'text-blue-400'
+                    }`}>
+                      {dbConnectionStatus === 'connected' ? 'Connected' :
+                       dbConnectionStatus === 'error' ? 'Disconnected' : 'Checking...'}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Mail className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Contact Information</h3>
-            </div>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={settings.business.contact.email}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'email', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone</label>
-                <input
-                  type="tel"
-                  value={settings.business.contact.phone}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'phone', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
-                <input
-                  type="text"
-                  value={settings.business.contact.address}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'address', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Website</label>
-                <input
-                  type="url"
-                  value={settings.business.contact.website}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'website', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
-                <input
-                  type="url"
-                  value={settings.business.contact.googlePhotosUrl}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'googlePhotosUrl', e.target.value)}
-                  placeholder="https://photos.google.com/share/your-album-link"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-                <p className="text-sm text-gray-400 mt-1">
-                  This URL will be used for the "View More" button in the gallery section
+                <p className="text-xs text-blue-300">
+                  {dbConnectionStatus === 'connected' 
+                    ? '✅ Settings will be saved to the Supabase database for persistence across sessions.'
+                    : dbConnectionStatus === 'error'
+                    ? '⚠️ Database unavailable. Settings will be saved to local storage only.'
+                    : 'Checking database connection...'
+                  }
                 </p>
+                {dbConnectionStatus === 'error' && (
+                  <button
+                    onClick={checkDatabaseConnection}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Retry Connection
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -689,6 +770,7 @@ export function AdminSettings() {
                   <li>• Gallery Items with category validation</li>
                   <li>• Products with pricing information</li>
                   <li>• Testimonials with rating validation</li>
+                  <li>• Settings including Google Photos URL</li>
                   <li>• Backup metadata and statistics</li>
                   <li>• Optimized column widths and formatting</li>
                 </ul>
@@ -823,7 +905,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
           <div>
@@ -840,7 +922,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
           <div>
@@ -857,7 +939,7 @@ export function AdminSettings() {
                   }
                 }))
               }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
         </div>
@@ -865,7 +947,7 @@ export function AdminSettings() {
 
       <div className="flex justify-end mt-8">
         <button
-          onClick={activeSection === 'business' ? handleSaveSettings : handlePasswordChange}
+          onClick={activeSection === 'gallery' ? handleSaveSettings : handlePasswordChange}
           disabled={isLoading || activeSection === 'backup'}
           className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50"
         >
@@ -873,10 +955,10 @@ export function AdminSettings() {
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              {activeSection === 'business' ? <Save className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+              {activeSection === 'gallery' ? <Save className="w-5 h-5" /> : activeSection === 'security' ? <Lock className="w-5 h-5" /> : null}
             </>
           )}
-          {activeSection === 'business' ? 'Save Changes' : activeSection === 'security' ? 'Update Password' : ''}
+          {activeSection === 'gallery' ? 'Save to Database' : activeSection === 'security' ? 'Update Password' : ''}
         </button>
       </div>
     </div>

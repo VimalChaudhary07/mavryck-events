@@ -1,4 +1,5 @@
-// Security utilities and constants
+// Production Security Configuration and Utilities
+
 export const SECURITY_CONFIG = {
   // Session configuration
   SESSION_TIMEOUT: 30 * 60 * 1000, // 30 minutes
@@ -70,7 +71,7 @@ export const generateCSP = (): string => {
   return directives;
 };
 
-// Security headers
+// Security headers for production
 export const getSecurityHeaders = () => {
   return {
     'Content-Security-Policy': generateCSP(),
@@ -92,7 +93,7 @@ export const sanitizeInput = (input: string): string => {
         '<': '&lt;',
         '>': '&gt;',
         '"': '&quot;',
-        "'": '&#x27;',
+        "'": '&#39;',
         '&': '&amp;'
       };
       return entities[match] || match;
@@ -101,7 +102,7 @@ export const sanitizeInput = (input: string): string => {
 
 // SQL injection prevention (for display purposes)
 export const sanitizeSQL = (input: string): string => {
-  return input.replace(/[';--]/g, '');
+  return input.replace(/[';-]/g, '');
 };
 
 // XSS prevention
@@ -184,12 +185,12 @@ class SecurityLogger {
     }
 
     // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Security Event:', securityEvent);
     }
 
     // In production, send to monitoring service
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       this.sendToMonitoring(securityEvent);
     }
   }
@@ -225,7 +226,7 @@ export const performSecurityChecks = (): { passed: boolean; warnings: string[] }
   const warnings: string[] = [];
 
   // Check if HTTPS is being used in production
-  if (process.env.NODE_ENV === 'production' && location.protocol !== 'https:') {
+  if (import.meta.env.PROD && location.protocol !== 'https:') {
     warnings.push('Application should be served over HTTPS in production');
   }
 
@@ -235,7 +236,7 @@ export const performSecurityChecks = (): { passed: boolean; warnings: string[] }
   }
 
   // Check for developer tools (basic check)
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env.PROD) {
     const devtools = {
       open: false,
       orientation: null as string | null
@@ -258,16 +259,6 @@ export const performSecurityChecks = (): { passed: boolean; warnings: string[] }
       }
     }, 500);
   }
-
-  // Check for common security headers
-  const requiredHeaders = [
-    'X-Content-Type-Options',
-    'X-Frame-Options',
-    'X-XSS-Protection'
-  ];
-
-  // Note: We can't actually check response headers from client-side
-  // This would be done server-side in a real application
 
   return {
     passed: warnings.length === 0,
@@ -314,5 +305,66 @@ export const initializeSecurity = (): void => {
     });
   });
 
-  console.log('Security measures initialized');
+  // Disable right-click in production
+  if (import.meta.env.PROD) {
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+
+    // Disable F12, Ctrl+Shift+I, Ctrl+U
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+          (e.ctrlKey && e.key === 'u')) {
+        e.preventDefault();
+      }
+    });
+  }
+
+  console.log('Security measures initialized for production');
 };
+
+// Rate limiting utility
+export class RateLimiter {
+  private attempts: Map<string, number[]> = new Map();
+
+  constructor(private maxAttempts: number, private windowMs: number) {}
+
+  isAllowed(identifier: string): boolean {
+    const now = Date.now();
+    const windowStart = now - this.windowMs;
+    
+    const userAttempts = this.attempts.get(identifier) || [];
+    const recentAttempts = userAttempts.filter(time => time > windowStart);
+    
+    this.attempts.set(identifier, recentAttempts);
+    
+    return recentAttempts.length < this.maxAttempts;
+  }
+
+  recordAttempt(identifier: string): void {
+    const now = Date.now();
+    const userAttempts = this.attempts.get(identifier) || [];
+    userAttempts.push(now);
+    this.attempts.set(identifier, userAttempts);
+  }
+
+  getRemainingAttempts(identifier: string): number {
+    const now = Date.now();
+    const windowStart = now - this.windowMs;
+    const userAttempts = this.attempts.get(identifier) || [];
+    const recentAttempts = userAttempts.filter(time => time > windowStart);
+    
+    return Math.max(0, this.maxAttempts - recentAttempts.length);
+  }
+
+  getTimeUntilReset(identifier: string): number {
+    const userAttempts = this.attempts.get(identifier) || [];
+    if (userAttempts.length === 0) return 0;
+    
+    const oldestAttempt = Math.min(...userAttempts);
+    const resetTime = oldestAttempt + this.windowMs;
+    
+    return Math.max(0, resetTime - Date.now());
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isAuthenticated, getCSRFTokenForForms, startActivityMonitoring } from '../lib/auth';
+import { initializeSecurity } from '../utils/security';
 import toast from 'react-hot-toast';
 
 interface SecurityMiddlewareProps {
@@ -18,6 +19,9 @@ export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
   const location = useLocation();
 
   useEffect(() => {
+    // Initialize security measures
+    initializeSecurity();
+
     const currentPath = location.pathname;
     const isAuth = isAuthenticated();
 
@@ -109,16 +113,15 @@ export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
       window.top.location = window.self.location;
     }
 
-    // Disable right-click context menu in production
-    const handleContextMenu = (e: MouseEvent) => {
-      if (process.env.NODE_ENV === 'production') {
+    // Production security measures
+    if (import.meta.env.PROD) {
+      // Disable right-click context menu
+      const handleContextMenu = (e: MouseEvent) => {
         e.preventDefault();
-      }
-    };
+      };
 
-    // Disable F12, Ctrl+Shift+I, Ctrl+U in production
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (process.env.NODE_ENV === 'production') {
+      // Disable F12, Ctrl+Shift+I, Ctrl+U
+      const handleKeyDown = (e: KeyboardEvent) => {
         // F12
         if (e.key === 'F12') {
           e.preventDefault();
@@ -135,17 +138,17 @@ export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
         if (e.ctrlKey && e.shiftKey && e.key === 'C') {
           e.preventDefault();
         }
-      }
-    };
+      };
 
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('contextmenu', handleContextMenu);
+      document.addEventListener('keydown', handleKeyDown);
 
-    // Cleanup
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+      // Cleanup
+      return () => {
+        document.removeEventListener('contextmenu', handleContextMenu);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
   }, [location.pathname, navigate]);
 
   return <>{children}</>;
