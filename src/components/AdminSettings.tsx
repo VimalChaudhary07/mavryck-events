@@ -53,27 +53,46 @@ export function AdminSettings() {
       confirmPassword: ''
     }
   });
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   useEffect(() => {
     loadSettings();
+    checkDatabaseConnection();
   }, []);
+
+  const checkDatabaseConnection = async () => {
+    try {
+      setDbConnectionStatus('checking');
+      const { error } = await supabase.from('site_settings').select('count', { count: 'exact', head: true });
+      setDbConnectionStatus(error ? 'error' : 'connected');
+    } catch (error) {
+      console.error('Database connection check failed:', error);
+      setDbConnectionStatus('error');
+    }
+  };
 
   const loadSettings = async () => {
     try {
-      // Try to load from database first
+      console.log('Loading settings from database...');
+      
+      // Always try to load from database first
       const { data: dbSettings, error } = await supabase
         .from('site_settings')
         .select('*')
         .single();
 
       if (dbSettings && !error) {
+        console.log('Settings loaded from database:', dbSettings);
         setSettings(prev => ({
           ...prev,
           gallery: {
             googlePhotosUrl: dbSettings.google_photos_url || prev.gallery.googlePhotosUrl
           }
         }));
+        setDbConnectionStatus('connected');
       } else {
+        console.log('No settings found in database, checking localStorage...');
+        
         // Fallback to localStorage for backward compatibility
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
@@ -85,20 +104,27 @@ export function AdminSettings() {
                 googlePhotosUrl: parsedSettings.business?.contact?.googlePhotosUrl || prev.gallery.googlePhotosUrl
               }
             }));
+            console.log('Settings loaded from localStorage');
           } catch (error) {
-            console.error('Failed to load settings from localStorage:', error);
+            console.error('Failed to parse localStorage settings:', error);
           }
         }
+        setDbConnectionStatus('error');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+      setDbConnectionStatus('error');
     }
   };
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
+    let savedToDatabase = false;
+    
     try {
-      // Save to database
+      console.log('Saving settings to database...', settings.gallery.googlePhotosUrl);
+      
+      // Always attempt to save to database first
       const { data: existingSettings } = await supabase
         .from('site_settings')
         .select('id')
@@ -110,21 +136,34 @@ export function AdminSettings() {
 
       if (existingSettings) {
         // Update existing settings
+        console.log('Updating existing settings in database...');
         const { error } = await supabase
           .from('site_settings')
           .update(settingsData)
           .eq('id', existingSettings.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Database update error:', error);
+          throw error;
+        }
+        console.log('Settings updated successfully in database');
       } else {
         // Create new settings
+        console.log('Creating new settings in database...');
         const { error } = await supabase
           .from('site_settings')
           .insert(settingsData);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Database insert error:', error);
+          throw error;
+        }
+        console.log('Settings created successfully in database');
       }
 
+      savedToDatabase = true;
+      setDbConnectionStatus('connected');
+      
       // Also save to localStorage for backward compatibility
       const settingsToSave = {
         business: {
@@ -134,12 +173,15 @@ export function AdminSettings() {
         }
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+      console.log('Settings also saved to localStorage for compatibility');
 
-      toast.success('Settings saved successfully to database');
-    } catch (error) {
-      console.error('Failed to save settings:', error);
+      toast.success('✅ Settings saved successfully to database!');
       
-      // Fallback to localStorage only
+    } catch (error) {
+      console.error('Failed to save settings to database:', error);
+      setDbConnectionStatus('error');
+      
+      // Fallback to localStorage only if database fails
       try {
         const settingsToSave = {
           business: {
@@ -149,10 +191,11 @@ export function AdminSettings() {
           }
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
-        toast.success('Settings saved to local storage (database unavailable)');
+        toast.error('⚠️ Database unavailable. Settings saved to local storage only.');
+        console.log('Fallback: Settings saved to localStorage');
       } catch (localError) {
         console.error('Failed to save to localStorage:', localError);
-        toast.error('Failed to save settings');
+        toast.error('❌ Failed to save settings anywhere!');
       }
     } finally {
       setIsLoading(false);
@@ -358,6 +401,7 @@ export function AdminSettings() {
         'Total Products': products?.length || 0,
         'Total Testimonials': testimonials?.length || 0,
         'Google Photos URL': settings.gallery.googlePhotosUrl,
+        'Database Status': dbConnectionStatus,
         'Backup Version': '2.0',
         'Application': 'Mavryck Events Management System'
       }]);
@@ -653,15 +697,47 @@ export function AdminSettings() {
               <p className="text-sm text-gray-400 mt-1">
                 This URL will be used for the "View More" button in the gallery section
               </p>
+              
+              {/* Database Status Indicator */}
               <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <Database className="w-4 h-4 text-blue-400" />
-                  <span className="text-sm text-blue-400 font-medium">Database Storage</span>
+                  <span className="text-sm text-blue-400 font-medium">Database Storage Status</span>
+                  <div className="flex items-center gap-1">
+                    {dbConnectionStatus === 'checking' && (
+                      <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {dbConnectionStatus === 'connected' && (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    )}
+                    {dbConnectionStatus === 'error' && (
+                      <AlertCircle className="w-4 h-4 text-red-400" />
+                    )}
+                    <span className={`text-xs font-medium ${
+                      dbConnectionStatus === 'connected' ? 'text-green-400' :
+                      dbConnectionStatus === 'error' ? 'text-red-400' : 'text-blue-400'
+                    }`}>
+                      {dbConnectionStatus === 'connected' ? 'Connected' :
+                       dbConnectionStatus === 'error' ? 'Disconnected' : 'Checking...'}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-blue-300">
-                  Settings are now saved to the Supabase database for persistence across sessions. 
-                  A backup copy is also maintained in local storage for compatibility.
+                  {dbConnectionStatus === 'connected' 
+                    ? '✅ Settings will be saved to the Supabase database for persistence across sessions.'
+                    : dbConnectionStatus === 'error'
+                    ? '⚠️ Database unavailable. Settings will be saved to local storage only.'
+                    : 'Checking database connection...'
+                  }
                 </p>
+                {dbConnectionStatus === 'error' && (
+                  <button
+                    onClick={checkDatabaseConnection}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Retry Connection
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -882,7 +958,7 @@ export function AdminSettings() {
               {activeSection === 'gallery' ? <Save className="w-5 h-5" /> : activeSection === 'security' ? <Lock className="w-5 h-5" /> : null}
             </>
           )}
-          {activeSection === 'gallery' ? 'Save Changes' : activeSection === 'security' ? 'Update Password' : ''}
+          {activeSection === 'gallery' ? 'Save to Database' : activeSection === 'security' ? 'Update Password' : ''}
         </button>
       </div>
     </div>
