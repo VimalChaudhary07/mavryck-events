@@ -90,11 +90,11 @@ export const sanitizeInput = (input: string): string => {
     .trim()
     .replace(/[<>\"'&]/g, (match) => {
       const entities: { [key: string]: string } = {
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#x27;',
-        '&': '&amp;'
+        '<': '<',
+        '>': '>',
+        '"': '"',
+        "'": ''',
+        '&': '&'
       };
       return entities[match] || match;
     });
@@ -102,7 +102,7 @@ export const sanitizeInput = (input: string): string => {
 
 // SQL injection prevention (for display purposes)
 export const sanitizeSQL = (input: string): string => {
-  return input.replace(/[';--]/g, '');
+  return input.replace(/[';-]/g, '');
 };
 
 // XSS prevention
