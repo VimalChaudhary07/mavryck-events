@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, Calendar, Users, MapPin } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { EventPlanningModal } from './EventPlanningModal';
+import EventPlanningModal from './EventPlanningModal';
 
 export function Hero() {
   const [isModalOpen, setIsModalOpen] = useState(false);
