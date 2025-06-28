@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Lock, Mail, Phone, MapPin, Globe, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
+import { Settings, Clock, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { 
   getEventRequests, 
@@ -47,10 +47,6 @@ export function AdminSettings() {
         sunday: { open: '07:00', close: '19:00' },
       },
       contact: {
-        email: 'contact@festive.finesse.events',
-        phone: '+91 1234567890',
-        address: '123 Event Street, City, State, India',
-        website: 'https://festive.finesse.events',
         googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
       }
     },
@@ -108,19 +104,6 @@ export function AdminSettings() {
     }
   };
 
-  const handleBusinessSettingChange = (section: string, field: string, value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      business: {
-        ...prev.business,
-        [section]: {
-          ...prev.business[section],
-          [field]: value
-        }
-      }
-    }));
-  };
-
   const handleHoursChange = (day: string, type: 'open' | 'close', value: string) => {
     setSettings(prev => ({
       ...prev,
@@ -132,6 +115,19 @@ export function AdminSettings() {
             ...prev.business.hours[day],
             [type]: value
           }
+        }
+      }
+    }));
+  };
+
+  const handleGooglePhotosUrlChange = (value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      business: {
+        ...prev.business,
+        contact: {
+          ...prev.business.contact,
+          googlePhotosUrl: value
         }
       }
     }));
@@ -605,59 +601,21 @@ export function AdminSettings() {
 
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Mail className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Contact Information</h3>
+              <ExternalLink className="w-5 h-5 text-orange-500" />
+              <h3 className="text-lg font-medium text-white">Gallery Settings</h3>
             </div>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={settings.business.contact.email}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'email', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone</label>
-                <input
-                  type="tel"
-                  value={settings.business.contact.phone}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'phone', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
-                <input
-                  type="text"
-                  value={settings.business.contact.address}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'address', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Website</label>
-                <input
-                  type="url"
-                  value={settings.business.contact.website}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'website', e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
-                <input
-                  type="url"
-                  value={settings.business.contact.googlePhotosUrl}
-                  onChange={(e) => handleBusinessSettingChange('contact', 'googlePhotosUrl', e.target.value)}
-                  placeholder="https://photos.google.com/share/your-album-link"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                />
-                <p className="text-sm text-gray-400 mt-1">
-                  This URL will be used for the "View More" button in the gallery section
-                </p>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
+              <input
+                type="url"
+                value={settings.business.contact.googlePhotosUrl}
+                onChange={(e) => handleGooglePhotosUrlChange(e.target.value)}
+                placeholder="https://photos.google.com/share/your-album-link"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              />
+              <p className="text-sm text-gray-400 mt-1">
+                This URL will be used for the "View More" button in the gallery section
+              </p>
             </div>
           </div>
         </div>
