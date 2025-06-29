@@ -145,7 +145,7 @@ export function Navbar() {
             </button>
             <button
               onClick={() => scrollToSection('services')}
-              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+              className="block w-full text-left px-3 py-2  text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Services
             </button>
