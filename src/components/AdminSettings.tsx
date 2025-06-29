@@ -1,80 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Lock, Save, Eye, EyeOff } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { getCurrentUser, updateUserEmail, updateUserPassword } from '../lib/auth';
+import { 
+  updateUserEmail, 
+  updateUserPassword, 
+  getCurrentUser,
+  exportDatabaseBackup,
+  importDatabaseBackup,
+  updateGooglePhotosUrl,
+  getGooglePhotosUrl
+} from '../lib/auth';
+import { User, Lock, Download, Upload, Camera, Save, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export function AdminSettings() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [email, setEmail] = useState('');
+const AdminSettings: React.FC = () => {
+  const [currentEmail, setCurrentEmail] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [googlePhotosUrl, setGooglePhotosUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('account');
 
   useEffect(() => {
     loadUserData();
+    loadGooglePhotosUrl();
   }, []);
 
   const loadUserData = async () => {
     try {
-      setLoading(true);
       const user = await getCurrentUser();
-      if (user) {
-        setCurrentUser(user);
-        setEmail(user.email || '');
+      if (user?.email) {
+        setCurrentEmail(user.email);
+        setNewEmail(user.email);
       }
     } catch (error) {
-      console.error('Failed to load user data:', error);
-      toast.error('Failed to load user data');
-    } finally {
-      setLoading(false);
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const loadGooglePhotosUrl = async () => {
+    try {
+      const url = await getGooglePhotosUrl();
+      setGooglePhotosUrl(url);
+    } catch (error) {
+      console.error('Error loading Google Photos URL:', error);
     }
   };
 
   const handleEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email.trim()) {
-      toast.error('Email is required');
+    if (!newEmail || newEmail === currentEmail) {
+      toast.error('Please enter a new email address');
       return;
     }
 
-    if (email === currentUser?.email) {
-      toast.error('New email must be different from current email');
-      return;
-    }
-
-    setIsUpdatingEmail(true);
-    
+    setIsLoading(true);
     try {
-      const success = await updateUserEmail(email);
+      const success = await updateUserEmail(newEmail);
       if (success) {
-        // Reload user data to get updated information
-        await loadUserData();
+        setCurrentEmail(newEmail);
       }
     } catch (error) {
-      console.error('Email update failed:', error);
+      console.error('Email change error:', error);
+      toast.error('Failed to update email');
     } finally {
-      setIsUpdatingEmail(false);
+      setIsLoading(false);
     }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newPassword.trim()) {
-      toast.error('New password is required');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long');
+    if (!newPassword) {
+      toast.error('Please enter a new password');
       return;
     }
 
@@ -83,8 +82,12 @@ export function AdminSettings() {
       return;
     }
 
-    setIsUpdatingPassword(true);
-    
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsLoading(true);
     try {
       const success = await updateUserPassword(newPassword);
       if (success) {
@@ -93,211 +96,334 @@ export function AdminSettings() {
         setConfirmPassword('');
       }
     } catch (error) {
-      console.error('Password update failed:', error);
+      console.error('Password change error:', error);
+      toast.error('Failed to update password');
     } finally {
-      setIsUpdatingPassword(false);
+      setIsLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const handleExportBackup = async () => {
+    setIsLoading(true);
+    try {
+      await exportDatabaseBackup();
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export backup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json') {
+      toast.error('Please select a valid JSON backup file');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const fileContent = await file.text();
+      const success = await importDatabaseBackup(fileContent);
+      if (success) {
+        // Reset file input
+        event.target.value = '';
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import backup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGooglePhotosUrlUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!googlePhotosUrl) {
+      toast.error('Please enter a Google Photos URL');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await updateGooglePhotosUrl(googlePhotosUrl);
+    } catch (error) {
+      console.error('Google Photos URL update error:', error);
+      toast.error('Failed to update Google Photos URL');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'account', label: 'Account Settings', icon: User },
+    { id: 'backup', label: 'Backup & Restore', icon: Download },
+    { id: 'gallery', label: 'Gallery Settings', icon: Camera }
+  ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-2">Admin Settings</h2>
-        <p className="text-gray-400">Manage your admin account settings and security preferences.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Account Information */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gray-800 rounded-xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <User className="w-6 h-6 text-orange-500" />
-            <h3 className="text-xl font-semibold text-white">Account Information</h3>
-          </div>
-
-          <form onSubmit={handleEmailChange} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                placeholder="Enter your email"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                User ID
-              </label>
-              <input
-                type="text"
-                value={currentUser?.id || ''}
-                className="w-full px-4 py-3 bg-gray-600 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
-                disabled
-                readOnly
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Last Sign In
-              </label>
-              <input
-                type="text"
-                value={currentUser?.last_sign_in_at ? new Date(currentUser.last_sign_in_at).toLocaleString() : 'Never'}
-                className="w-full px-4 py-3 bg-gray-600 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
-                disabled
-                readOnly
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isUpdatingEmail || email === currentUser?.email}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-            >
-              {isUpdatingEmail ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  Update Email
-                </>
-              )}
-            </button>
-          </form>
-        </motion.div>
-
-        {/* Security Settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-gray-800 rounded-xl p-6"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <Lock className="w-6 h-6 text-orange-500" />
-            <h3 className="text-xl font-semibold text-white">Security Settings</h3>
-          </div>
-
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                New Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-12 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter new password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Confirm New Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-12 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Confirm new password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isUpdatingPassword || !newPassword || newPassword !== confirmPassword}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-            >
-              {isUpdatingPassword ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Lock className="w-5 h-5" />
-                  Update Password
-                </>
-              )}
-            </button>
-          </form>
-        </motion.div>
-      </div>
-
-      {/* Security Information */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-gray-800 rounded-xl p-6"
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <Settings className="w-6 h-6 text-orange-500" />
-          <h3 className="text-xl font-semibold text-white">Security Information</h3>
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4">
+          <h1 className="text-2xl font-bold text-white">Admin Settings</h1>
+          <p className="text-orange-100 mt-1">Manage your account and system settings</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="bg-gray-700 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-2">Session Timeout</h4>
-            <p className="text-gray-400 text-sm">30 minutes of inactivity</p>
-          </div>
-          
-          <div className="bg-gray-700 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-2">Rate Limiting</h4>
-            <p className="text-gray-400 text-sm">5 attempts per 15 minutes</p>
-          </div>
-          
-          <div className="bg-gray-700 rounded-lg p-4">
-            <h4 className="text-white font-medium mb-2">Password Requirements</h4>
-            <p className="text-gray-400 text-sm">Minimum 6 characters</p>
-          </div>
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                    activeTab === tab.id
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
-      </motion.div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {activeTab === 'account' && (
+            <div className="space-y-8">
+              {/* Email Change Section */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <User className="w-5 h-5 mr-2 text-orange-500" />
+                  Change Email Address
+                </h3>
+                <form onSubmit={handleEmailChange} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Current Email
+                    </label>
+                    <input
+                      type="email"
+                      value={currentEmail}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      New Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      placeholder="Enter new email address"
+                      required
+                    />
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div className="flex">
+                      <AlertCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5" />
+                      <div className="text-sm text-blue-700">
+                        <p className="font-medium">Email Change Process:</p>
+                        <ul className="mt-1 list-disc list-inside space-y-1">
+                          <li>You'll receive a confirmation email at your new address</li>
+                          <li>Click the confirmation link to complete the change</li>
+                          <li>Your current email will remain active until confirmed</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading || newEmail === currentEmail}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? 'Updating...' : 'Update Email'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Password Change Section */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Lock className="w-5 h-5 mr-2 text-orange-500" />
+                  Change Password
+                </h3>
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      placeholder="Enter new password"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      placeholder="Confirm new password"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Password must be at least 6 characters long
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading || !newPassword || newPassword !== confirmPassword}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? 'Updating...' : 'Update Password'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'backup' && (
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Download className="w-5 h-5 mr-2 text-orange-500" />
+                  Database Backup & Restore
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Export Backup */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-gray-900">Export Backup</h4>
+                    <p className="text-sm text-gray-600">
+                      Download a complete backup of your database including all events, gallery items, products, and settings.
+                    </p>
+                    <button
+                      onClick={handleExportBackup}
+                      disabled={isLoading}
+                      className="w-full bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {isLoading ? 'Exporting...' : 'Export Backup'}
+                    </button>
+                  </div>
+
+                  {/* Import Backup */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-gray-900">Import Backup</h4>
+                    <p className="text-sm text-gray-600">
+                      Restore your database from a previously exported backup file. This will replace all current data.
+                    </p>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleImportBackup}
+                        disabled={isLoading}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <div className="flex">
+                    <AlertCircle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" />
+                    <div className="text-sm text-yellow-700">
+                      <p className="font-medium">Important:</p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Always create a backup before importing new data</li>
+                        <li>Import will replace all existing data</li>
+                        <li>Only import backup files from trusted sources</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'gallery' && (
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Camera className="w-5 h-5 mr-2 text-orange-500" />
+                  Gallery Settings
+                </h3>
+                
+                <form onSubmit={handleGooglePhotosUrlUpdate} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Google Photos Album URL
+                    </label>
+                    <input
+                      type="url"
+                      value={googlePhotosUrl}
+                      onChange={(e) => setGooglePhotosUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      placeholder="https://photos.google.com/share/your-album-link"
+                      required
+                    />
+                    <p className="mt-2 text-sm text-gray-600">
+                      This URL will be used for the "View More Photos" button in the gallery section.
+                    </p>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div className="flex">
+                      <AlertCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5" />
+                      <div className="text-sm text-blue-700">
+                        <p className="font-medium">How to get your Google Photos album URL:</p>
+                        <ol className="mt-1 list-decimal list-inside space-y-1">
+                          <li>Open Google Photos and create or select an album</li>
+                          <li>Click the share button and create a shareable link</li>
+                          <li>Copy the generated URL and paste it here</li>
+                          <li>Make sure the album is set to "Anyone with the link can view"</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? 'Updating...' : 'Update Gallery URL'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default AdminSettings;

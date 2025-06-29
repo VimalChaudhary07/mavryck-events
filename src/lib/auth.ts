@@ -49,14 +49,36 @@ const recordLoginAttempt = (email: string, success: boolean): void => {
   console.log(`Login attempt: ${email}, Success: ${success}, Time: ${new Date().toISOString()}`);
 };
 
-// Input validation
+// Enhanced input validation and sanitization
 const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
   return emailRegex.test(email.trim().toLowerCase());
 };
 
 const sanitizeInput = (input: string): string => {
   return input.trim().replace(/[<>\"'&]/g, '');
+};
+
+// Enhanced email sanitization for Supabase compatibility
+const sanitizeEmailForSupabase = (email: string): string => {
+  // Remove all whitespace and convert to lowercase
+  let sanitized = email.replace(/\s+/g, '').toLowerCase();
+  
+  // Remove any non-standard characters that might cause issues
+  sanitized = sanitized.replace(/[^\w@.-]/g, '');
+  
+  // Ensure proper email format
+  const emailParts = sanitized.split('@');
+  if (emailParts.length === 2) {
+    const [localPart, domain] = emailParts;
+    // Clean local part - remove consecutive dots and leading/trailing dots
+    const cleanLocal = localPart.replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '');
+    // Clean domain part
+    const cleanDomain = domain.replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '');
+    sanitized = `${cleanLocal}@${cleanDomain}`;
+  }
+  
+  return sanitized;
 };
 
 // Session management
@@ -293,31 +315,58 @@ export const getCurrentUser = async () => {
   }
 };
 
-// Update user email
+// Enhanced email update with better validation and error handling
 export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
   try {
+    // Enhanced sanitization for Supabase compatibility
+    const sanitizedEmail = sanitizeEmailForSupabase(newEmail);
+    
+    // Validate the sanitized email
+    if (!validateEmail(sanitizedEmail)) {
+      toast.error('Invalid email format. Please check your email address.');
+      return false;
+    }
+    
+    // Additional check for common email issues
+    if (sanitizedEmail.length < 5 || sanitizedEmail.length > 254) {
+      toast.error('Email address length is invalid.');
+      return false;
+    }
+    
+    console.log('Attempting to update email to:', sanitizedEmail);
+    
     const { error } = await supabase.auth.updateUser({
-      email: newEmail
+      email: sanitizedEmail
     });
     
     if (error) {
       console.error('Email update error:', error);
-      toast.error('Failed to update email');
+      
+      // Handle specific Supabase errors
+      if (error.message.includes('email_address_invalid')) {
+        toast.error('The email address format is not accepted by the system. Please try a different email.');
+      } else if (error.message.includes('email_address_not_confirmed')) {
+        toast.error('Please confirm your current email before changing it.');
+      } else if (error.message.includes('email_change_token_already_sent')) {
+        toast.error('Email change request already sent. Please check your inbox.');
+      } else {
+        toast.error(`Failed to update email: ${error.message}`);
+      }
       return false;
     }
     
     // Update session data
     const sessionData = getSessionData();
     if (sessionData) {
-      sessionData.email = newEmail;
+      sessionData.email = sanitizedEmail;
       localStorage.setItem('sessionData', JSON.stringify(sessionData));
     }
     
-    toast.success('Email updated successfully');
+    toast.success('Email update request sent. Please check your inbox to confirm the change.');
     return true;
   } catch (error) {
     console.error('Email update error:', error);
-    toast.error('Failed to update email');
+    toast.error('Failed to update email. Please try again.');
     return false;
   }
 };
@@ -325,13 +374,26 @@ export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
 // Update user password
 export const updateUserPassword = async (newPassword: string): Promise<boolean> => {
   try {
+    // Validate password strength
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return false;
+    }
+    
     const { error } = await supabase.auth.updateUser({
       password: newPassword
     });
     
     if (error) {
       console.error('Password update error:', error);
-      toast.error('Failed to update password');
+      
+      if (error.message.includes('password_too_short')) {
+        toast.error('Password is too short. Please use at least 6 characters.');
+      } else if (error.message.includes('password_too_weak')) {
+        toast.error('Password is too weak. Please use a stronger password.');
+      } else {
+        toast.error(`Failed to update password: ${error.message}`);
+      }
       return false;
     }
     
@@ -341,5 +403,187 @@ export const updateUserPassword = async (newPassword: string): Promise<boolean> 
     console.error('Password update error:', error);
     toast.error('Failed to update password');
     return false;
+  }
+};
+
+// Backup and restore functions
+export const exportDatabaseBackup = async (): Promise<string | null> => {
+  try {
+    const tables = [
+      'event_requests',
+      'gallery',
+      'products',
+      'testimonials',
+      'contact_messages',
+      'event_categories',
+      'event_templates',
+      'vendors',
+      'site_settings'
+    ];
+    
+    const backup: any = {
+      timestamp: new Date().toISOString(),
+      version: '1.0',
+      data: {}
+    };
+    
+    for (const table of tables) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('*')
+        .is('deleted_at', null);
+      
+      if (error) {
+        console.error(`Error backing up ${table}:`, error);
+        continue;
+      }
+      
+      backup.data[table] = data;
+    }
+    
+    const backupJson = JSON.stringify(backup, null, 2);
+    const blob = new Blob([backupJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create download link
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mavryck-events-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('Database backup exported successfully');
+    return backupJson;
+  } catch (error) {
+    console.error('Backup export error:', error);
+    toast.error('Failed to export backup');
+    return null;
+  }
+};
+
+export const importDatabaseBackup = async (backupData: string): Promise<boolean> => {
+  try {
+    const backup = JSON.parse(backupData);
+    
+    if (!backup.data || !backup.timestamp) {
+      toast.error('Invalid backup file format');
+      return false;
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const [tableName, tableData] of Object.entries(backup.data)) {
+      if (!Array.isArray(tableData)) continue;
+      
+      try {
+        // Clear existing data (soft delete)
+        await supabase
+          .from(tableName)
+          .update({ deleted_at: new Date().toISOString() })
+          .is('deleted_at', null);
+        
+        // Insert backup data
+        if ((tableData as any[]).length > 0) {
+          const { error } = await supabase
+            .from(tableName)
+            .insert(tableData as any[]);
+          
+          if (error) {
+            console.error(`Error restoring ${tableName}:`, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing ${tableName}:`, error);
+        errorCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      toast.success(`Database restored successfully. ${successCount} tables restored.`);
+      if (errorCount > 0) {
+        toast.error(`${errorCount} tables had errors during restore.`);
+      }
+      return true;
+    } else {
+      toast.error('Failed to restore database');
+      return false;
+    }
+  } catch (error) {
+    console.error('Backup import error:', error);
+    toast.error('Failed to import backup. Please check the file format.');
+    return false;
+  }
+};
+
+// Site settings functions
+export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
+  try {
+    // Validate URL format
+    if (!url.includes('photos.google.com')) {
+      toast.error('Please enter a valid Google Photos URL');
+      return false;
+    }
+    
+    // Get existing settings or create new one
+    const { data: existingSettings } = await supabase
+      .from('site_settings')
+      .select('*')
+      .limit(1)
+      .single();
+    
+    if (existingSettings) {
+      const { error } = await supabase
+        .from('site_settings')
+        .update({ google_photos_url: url })
+        .eq('id', existingSettings.id);
+      
+      if (error) {
+        console.error('Error updating Google Photos URL:', error);
+        toast.error('Failed to update Google Photos URL');
+        return false;
+      }
+    } else {
+      const { error } = await supabase
+        .from('site_settings')
+        .insert({ google_photos_url: url });
+      
+      if (error) {
+        console.error('Error creating site settings:', error);
+        toast.error('Failed to save Google Photos URL');
+        return false;
+      }
+    }
+    
+    toast.success('Google Photos URL updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Google Photos URL update error:', error);
+    toast.error('Failed to update Google Photos URL');
+    return false;
+  }
+};
+
+export const getGooglePhotosUrl = async (): Promise<string> => {
+  try {
+    const { data, error } = await supabase
+      .from('site_settings')
+      .select('google_photos_url')
+      .limit(1)
+      .single();
+    
+    if (error || !data) {
+      return 'https://photos.google.com/share/your-album-link';
+    }
+    
+    return data.google_photos_url || 'https://photos.google.com/share/your-album-link';
+  } catch (error) {
+    console.error('Error fetching Google Photos URL:', error);
+    return 'https://photos.google.com/share/your-album-link';
   }
 };
