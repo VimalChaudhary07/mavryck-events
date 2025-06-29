@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  updateUserEmail, 
   updateUserPassword, 
   getCurrentUser,
   exportDatabaseBackup,
@@ -8,38 +7,31 @@ import {
   updateGooglePhotosUrl,
   getGooglePhotosUrl
 } from '../lib/auth';
-import { User, Lock, Download, Upload, Camera, Save, AlertCircle } from 'lucide-react';
+import { Lock, Download, Upload, Camera, Save, AlertCircle, CheckCircle, Clock, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+interface BackupProgress {
+  stage: string;
+  progress: number;
+  total: number;
+  currentTable?: string;
+  recordsProcessed?: number;
+  totalRecords?: number;
+}
+
 const AdminSettings: React.FC = () => {
-  const [currentEmail, setCurrentEmail] = useState('');
-  const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [googlePhotosUrl, setGooglePhotosUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('account');
-  const [backupProgress, setBackupProgress] = useState(0);
-  const [backupStatus, setBackupStatus] = useState('');
+  const [activeTab, setActiveTab] = useState('backup');
+  const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<BackupProgress | null>(null);
 
   useEffect(() => {
-    loadUserData();
     loadGooglePhotosUrl();
   }, []);
-
-  const loadUserData = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (user?.email) {
-        const normalizedEmail = user.email.trim().toLowerCase();
-        setCurrentEmail(normalizedEmail);
-        setNewEmail(normalizedEmail);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
 
   const loadGooglePhotosUrl = async () => {
     try {
@@ -47,37 +39,6 @@ const AdminSettings: React.FC = () => {
       setGooglePhotosUrl(url);
     } catch (error) {
       console.error('Error loading Google Photos URL:', error);
-    }
-  };
-
-  const handleEmailChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Normalize both emails for comparison
-    const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
-    const normalizedNewEmail = newEmail.trim().toLowerCase();
-    
-    if (!normalizedNewEmail) {
-      toast.error('Please enter a new email address');
-      return;
-    }
-
-    if (normalizedNewEmail === normalizedCurrentEmail) {
-      toast.error('The new email address is the same as your current email');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const success = await updateUserEmail(normalizedNewEmail, normalizedCurrentEmail);
-      if (success) {
-        setCurrentEmail(normalizedNewEmail);
-      }
-    } catch (error) {
-      console.error('Email change error:', error);
-      toast.error('Failed to update email');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -117,23 +78,27 @@ const AdminSettings: React.FC = () => {
 
   const handleExportBackup = async () => {
     setIsLoading(true);
-    setBackupProgress(0);
-    setBackupStatus('Starting backup...');
+    setBackupProgress({ stage: 'Initializing...', progress: 0, total: 100 });
     
     try {
-      await exportDatabaseBackup((progress, status) => {
-        setBackupProgress(progress);
-        setBackupStatus(status);
+      await exportDatabaseBackup((progress, status, details) => {
+        setBackupProgress({
+          stage: status,
+          progress: progress,
+          total: 100,
+          currentTable: details?.currentTable,
+          recordsProcessed: details?.recordsProcessed,
+          totalRecords: details?.totalRecords
+        });
       });
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Failed to export backup');
-      setBackupStatus('Backup failed');
+      setBackupProgress({ stage: 'Backup failed', progress: 0, total: 100 });
     } finally {
       setIsLoading(false);
       setTimeout(() => {
-        setBackupProgress(0);
-        setBackupStatus('');
+        setBackupProgress(null);
       }, 3000);
     }
   };
@@ -142,20 +107,24 @@ const AdminSettings: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/json') {
-      toast.error('Please select a valid JSON backup file');
+    if (!file.name.endsWith('.xlsx')) {
+      toast.error('Please select a valid XLSX backup file');
       return;
     }
 
     setIsLoading(true);
-    setBackupProgress(0);
-    setBackupStatus('Reading backup file...');
+    setRestoreProgress({ stage: 'Reading file...', progress: 0, total: 100 });
     
     try {
-      const fileContent = await file.text();
-      const success = await importDatabaseBackup(fileContent, (progress, status) => {
-        setBackupProgress(progress);
-        setBackupStatus(status);
+      const success = await importDatabaseBackup(file, (progress, status, details) => {
+        setRestoreProgress({
+          stage: status,
+          progress: progress,
+          total: 100,
+          currentTable: details?.currentTable,
+          recordsProcessed: details?.recordsProcessed,
+          totalRecords: details?.totalRecords
+        });
       });
       
       if (success) {
@@ -165,12 +134,11 @@ const AdminSettings: React.FC = () => {
     } catch (error) {
       console.error('Import error:', error);
       toast.error('Failed to import backup');
-      setBackupStatus('Import failed');
+      setRestoreProgress({ stage: 'Import failed', progress: 0, total: 100 });
     } finally {
       setIsLoading(false);
       setTimeout(() => {
-        setBackupProgress(0);
-        setBackupStatus('');
+        setRestoreProgress(null);
       }, 3000);
     }
   };
@@ -195,15 +163,55 @@ const AdminSettings: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'account', label: 'Account Settings', icon: User },
-    { id: 'backup', label: 'Backup & Restore', icon: Download },
+    { id: 'backup', label: 'Backup & Restore', icon: Database },
+    { id: 'security', label: 'Security Settings', icon: Lock },
     { id: 'gallery', label: 'Gallery Settings', icon: Camera }
   ];
 
-  // Check if new email is different from current
-  const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
-  const normalizedNewEmail = newEmail.trim().toLowerCase();
-  const isEmailChanged = normalizedNewEmail !== normalizedCurrentEmail && normalizedNewEmail.length > 0;
+  const renderProgressIndicator = (progress: BackupProgress | null, title: string) => {
+    if (!progress) return null;
+
+    return (
+      <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-blue-900">{title}</h4>
+          <span className="text-sm text-blue-600">{progress.progress}%</span>
+        </div>
+        
+        <div className="w-full bg-blue-200 rounded-full h-3 mb-3">
+          <div 
+            className="bg-blue-600 h-3 rounded-full transition-all duration-300 flex items-center justify-center"
+            style={{ width: `${progress.progress}%` }}
+          >
+            {progress.progress > 10 && (
+              <span className="text-xs text-white font-medium">{progress.progress}%</span>
+            )}
+          </div>
+        </div>
+        
+        <div className="space-y-2">
+          <div className="flex items-center text-sm text-blue-700">
+            <Clock className="w-4 h-4 mr-2" />
+            <span>{progress.stage}</span>
+          </div>
+          
+          {progress.currentTable && (
+            <div className="flex items-center text-sm text-blue-600">
+              <Database className="w-4 h-4 mr-2" />
+              <span>Processing: {progress.currentTable}</span>
+            </div>
+          )}
+          
+          {progress.recordsProcessed !== undefined && progress.totalRecords !== undefined && (
+            <div className="flex items-center text-sm text-blue-600">
+              <CheckCircle className="w-4 h-4 mr-2" />
+              <span>Records: {progress.recordsProcessed} / {progress.totalRecords}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -211,7 +219,7 @@ const AdminSettings: React.FC = () => {
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4">
           <h1 className="text-2xl font-bold text-white">Admin Settings</h1>
-          <p className="text-orange-100 mt-1">Manage your account and system settings</p>
+          <p className="text-orange-100 mt-1">Manage your system settings and data</p>
         </div>
 
         {/* Tab Navigation */}
@@ -239,63 +247,119 @@ const AdminSettings: React.FC = () => {
 
         {/* Tab Content */}
         <div className="p-6">
-          {activeTab === 'account' && (
-            <div className="space-y-8">
-              {/* Email Change Section */}
+          {activeTab === 'backup' && (
+            <div className="space-y-6">
               <div className="bg-gray-50 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-orange-500" />
-                  Change Email Address
+                  <Database className="w-5 h-5 mr-2 text-orange-500" />
+                  Enhanced Database Backup & Restore
                 </h3>
-                <form onSubmit={handleEmailChange} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Current Email
-                    </label>
-                    <input
-                      type="email"
-                      value={currentEmail}
-                      disabled
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      New Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-                      placeholder="Enter new email address"
-                      required
-                    />
-                  </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                    <div className="flex">
-                      <AlertCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5" />
-                      <div className="text-sm text-blue-700">
-                        <p className="font-medium">Email Change Process:</p>
-                        <ul className="mt-1 list-disc list-inside space-y-1">
-                          <li>You'll receive a confirmation email at your new address</li>
-                          <li>Click the confirmation link to complete the change</li>
-                          <li>Your current email will remain active until confirmed</li>
-                        </ul>
-                      </div>
+                
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex">
+                    <AlertCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5" />
+                    <div className="text-sm text-blue-700">
+                      <p className="font-medium">Backup includes the following sections:</p>
+                      <ul className="mt-2 grid grid-cols-2 gap-1 list-disc list-inside">
+                        <li>Overview Statistics</li>
+                        <li>Event Requests</li>
+                        <li>Contact Messages</li>
+                        <li>Gallery Items</li>
+                        <li>Products & Services</li>
+                        <li>Customer Testimonials</li>
+                      </ul>
                     </div>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading || !isEmailChanged}
-                    className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {isLoading ? 'Updating...' : 'Update Email'}
-                  </button>
-                </form>
-              </div>
+                </div>
+                
+                {/* Export Progress */}
+                {renderProgressIndicator(backupProgress, 'Export Progress')}
+                
+                {/* Import Progress */}
+                {renderProgressIndicator(restoreProgress, 'Import Progress')}
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Export Backup */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-gray-900 flex items-center">
+                      <Download className="w-4 h-4 mr-2 text-green-500" />
+                      Export Backup
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      Download a complete backup of your database as an Excel file with formatted sheets for each data section.
+                    </p>
+                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                      <h5 className="text-sm font-medium text-green-800 mb-2">Export Features:</h5>
+                      <ul className="text-xs text-green-700 space-y-1">
+                        <li>• Real-time progress tracking</li>
+                        <li>• Formatted Excel sheets with auto-sized columns</li>
+                        <li>• Metadata and statistics included</li>
+                        <li>• Color-coded status indicators</li>
+                        <li>• Optimized for viewing and analysis</li>
+                      </ul>
+                    </div>
+                    <button
+                      onClick={handleExportBackup}
+                      disabled={isLoading}
+                      className="w-full bg-green-500 text-white px-4 py-3 rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {isLoading && backupProgress ? 'Exporting...' : 'Export Database Backup'}
+                    </button>
+                  </div>
 
+                  {/* Import Backup */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-gray-900 flex items-center">
+                      <Upload className="w-4 h-4 mr-2 text-blue-500" />
+                      Import Backup
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      Restore your database from a previously exported XLSX backup file with intelligent data validation.
+                    </p>
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                      <h5 className="text-sm font-medium text-blue-800 mb-2">Import Features:</h5>
+                      <ul className="text-xs text-blue-700 space-y-1">
+                        <li>• Real-time progress with table-by-table updates</li>
+                        <li>• Data validation and error handling</li>
+                        <li>• Automatic data type conversion</li>
+                        <li>• Detailed error reporting</li>
+                        <li>• Safe restoration with rollback on errors</li>
+                      </ul>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".xlsx"
+                        onChange={handleImportBackup}
+                        disabled={isLoading}
+                        className="w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <div className="flex">
+                    <AlertCircle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" />
+                    <div className="text-sm text-yellow-700">
+                      <p className="font-medium">Important Safety Notes:</p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Export creates a comprehensive Excel file with all data sections</li>
+                        <li>Always create a backup before importing new data</li>
+                        <li>Import will replace existing data in the selected sections</li>
+                        <li>Only import backup files from trusted sources</li>
+                        <li>Large datasets may take several minutes to process</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'security' && (
+            <div className="space-y-6">
               {/* Password Change Section */}
               <div className="bg-gray-50 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -343,83 +407,6 @@ const AdminSettings: React.FC = () => {
                     {isLoading ? 'Updating...' : 'Update Password'}
                   </button>
                 </form>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'backup' && (
-            <div className="space-y-6">
-              <div className="bg-gray-50 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Download className="w-5 h-5 mr-2 text-orange-500" />
-                  Database Backup & Restore
-                </h3>
-                
-                {/* Progress Indicator */}
-                {(isLoading && (backupProgress > 0 || backupStatus)) && (
-                  <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-blue-700">{backupStatus}</span>
-                      <span className="text-sm text-blue-600">{backupProgress}%</span>
-                    </div>
-                    <div className="w-full bg-blue-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${backupProgress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* Export Backup */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Export Backup</h4>
-                    <p className="text-sm text-gray-600">
-                      Download a complete backup of your database including all events, gallery items, products, and settings as an Excel file.
-                    </p>
-                    <button
-                      onClick={handleExportBackup}
-                      disabled={isLoading}
-                      className="w-full bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      {isLoading ? 'Exporting...' : 'Export Backup'}
-                    </button>
-                  </div>
-
-                  {/* Import Backup */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Import Backup</h4>
-                    <p className="text-sm text-gray-600">
-                      Restore your database from a previously exported JSON backup file. This will replace all current data.
-                    </p>
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={handleImportBackup}
-                        disabled={isLoading}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                  <div className="flex">
-                    <AlertCircle className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" />
-                    <div className="text-sm text-yellow-700">
-                      <p className="font-medium">Important:</p>
-                      <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Export creates an Excel file for viewing and a JSON file for import</li>
-                        <li>Always create a backup before importing new data</li>
-                        <li>Import will replace all existing data</li>
-                        <li>Only import backup files from trusted sources</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           )}

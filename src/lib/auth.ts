@@ -18,6 +18,14 @@ interface LoginAttempt {
   ip?: string;
 }
 
+interface ProgressCallback {
+  (progress: number, status: string, details?: {
+    currentTable?: string;
+    recordsProcessed?: number;
+    totalRecords?: number;
+  }): void;
+}
+
 // In-memory storage for login attempts (in production, use Redis or database)
 let loginAttempts: LoginAttempt[] = [];
 
@@ -290,80 +298,6 @@ export const getCurrentUser = async () => {
   }
 };
 
-// Fixed email update with proper validation and current email check
-export const updateUserEmail = async (newEmail: string, currentEmail?: string): Promise<boolean> => {
-  try {
-    // Simple sanitization - just trim and lowercase
-    const cleanEmail = newEmail.trim().toLowerCase();
-    
-    // Validate the email
-    if (!validateEmail(cleanEmail)) {
-      toast.error('Invalid email format. Please check your email address.');
-      return false;
-    }
-    
-    // Additional basic checks
-    if (cleanEmail.length < 5 || cleanEmail.length > 254) {
-      toast.error('Email address length is invalid.');
-      return false;
-    }
-    
-    // Get current user to compare emails
-    const currentUser = await getCurrentUser();
-    const actualCurrentEmail = currentUser?.email?.trim().toLowerCase();
-    
-    // Check if the new email is the same as current email
-    if (cleanEmail === actualCurrentEmail) {
-      toast.error('The new email address is the same as your current email address.');
-      return false;
-    }
-    
-    // Also check against provided currentEmail parameter
-    if (currentEmail && cleanEmail === currentEmail.trim().toLowerCase()) {
-      toast.error('The new email address is the same as your current email address.');
-      return false;
-    }
-    
-    console.log('Attempting to update email from:', actualCurrentEmail, 'to:', cleanEmail);
-    
-    const { error } = await supabase.auth.updateUser({
-      email: cleanEmail
-    });
-    
-    if (error) {
-      console.error('Email update error:', error);
-      
-      // Handle specific Supabase errors
-      if (error.message.includes('email_address_invalid')) {
-        toast.error('The email address format is not accepted by the system. Please try a different email.');
-      } else if (error.message.includes('email_address_not_confirmed')) {
-        toast.error('Please confirm your current email before changing it.');
-      } else if (error.message.includes('email_change_token_already_sent')) {
-        toast.error('Email change request already sent. Please check your inbox.');
-      } else if (error.message.includes('same_email')) {
-        toast.error('The new email address is the same as your current email.');
-      } else {
-        toast.error(`Failed to update email: ${error.message}`);
-      }
-      return false;
-    }
-    
-    // Update session data
-    const sessionData = getSessionData();
-    if (sessionData) {
-      sessionData.email = cleanEmail;
-      localStorage.setItem('sessionData', JSON.stringify(sessionData));
-    }
-    
-    toast.success('Email update request sent. Please check your inbox to confirm the change.');
-    return true;
-  } catch (error) {
-    console.error('Email update error:', error);
-    toast.error('Failed to update email. Please try again.');
-    return false;
-  }
-};
-
 // Update user password
 export const updateUserPassword = async (newPassword: string): Promise<boolean> => {
   try {
@@ -399,106 +333,155 @@ export const updateUserPassword = async (newPassword: string): Promise<boolean> 
   }
 };
 
-// Enhanced backup export to Excel with progress indicators
-export const exportDatabaseBackup = async (onProgress?: (progress: number, status: string) => void): Promise<string | null> => {
+// Enhanced backup export to Excel with real-time progress indicators
+export const exportDatabaseBackup = async (onProgress?: ProgressCallback): Promise<string | null> => {
   try {
-    const tables = [
-      'event_requests',
-      'gallery',
-      'products',
-      'testimonials',
-      'contact_messages',
-      'event_categories',
-      'event_templates',
-      'vendors',
-      'site_settings',
-      'invoices',
-      'invoice_items',
-      'event_timeline',
-      'event_attachments',
-      'user_preferences',
-      'admin_users'
+    // Define the specific tables we want to backup
+    const targetTables = [
+      { name: 'event_requests', displayName: 'Event Requests' },
+      { name: 'contact_messages', displayName: 'Contact Messages' },
+      { name: 'gallery', displayName: 'Gallery Items' },
+      { name: 'products', displayName: 'Products & Services' },
+      { name: 'testimonials', displayName: 'Customer Testimonials' }
     ];
     
-    onProgress?.(0, 'Initializing backup...');
-    
-    const backup: any = {
-      timestamp: new Date().toISOString(),
-      version: '2.0',
-      data: {}
-    };
+    onProgress?.(0, 'Initializing enhanced backup...', { totalRecords: targetTables.length });
     
     // Create Excel workbook
     const workbook = XLSX.utils.book_new();
     
-    // Add metadata sheet
-    const metadataSheet = XLSX.utils.json_to_sheet([{
-      'Backup Date': new Date().toLocaleDateString(),
-      'Backup Time': new Date().toLocaleTimeString(),
-      'Version': '2.0',
-      'Total Tables': tables.length,
-      'Generated By': 'Mavryck Events Admin System'
-    }]);
-    XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Backup Info');
+    // Add overview/metadata sheet first
+    onProgress?.(5, 'Creating overview sheet...', { currentTable: 'Overview' });
     
-    let processedTables = 0;
+    let totalRecords = 0;
+    const tableStats: any[] = [];
     
-    for (const table of tables) {
+    // First pass: collect statistics
+    for (const table of targetTables) {
       try {
-        onProgress?.(
-          Math.round((processedTables / tables.length) * 80), 
-          `Backing up ${table}...`
-        );
-        
-        // Use different query for tables that might not have deleted_at column
-        let query = supabase.from(table).select('*');
+        let query = supabase.from(table.name).select('*', { count: 'exact', head: true });
         
         // Only add deleted_at filter for tables that have this column
-        const tablesWithDeletedAt = [
-          'event_requests', 'gallery', 'products', 'testimonials', 
-          'contact_messages', 'site_settings'
-        ];
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        if (tablesWithDeletedAt.includes(table.name)) {
+          query = query.is('deleted_at', null);
+        }
         
-        if (tablesWithDeletedAt.includes(table)) {
+        const { count, error } = await query;
+        
+        if (!error && count !== null) {
+          totalRecords += count;
+          tableStats.push({
+            'Section': table.displayName,
+            'Records': count,
+            'Status': count > 0 ? 'Has Data' : 'Empty',
+            'Last Updated': new Date().toLocaleDateString()
+          });
+        }
+      } catch (error) {
+        console.warn(`Failed to get count for ${table.name}:`, error);
+        tableStats.push({
+          'Section': table.displayName,
+          'Records': 0,
+          'Status': 'Error',
+          'Last Updated': 'N/A'
+        });
+      }
+    }
+    
+    // Create overview sheet
+    const overviewData = [
+      { 'Metric': 'Backup Date', 'Value': new Date().toLocaleDateString() },
+      { 'Metric': 'Backup Time', 'Value': new Date().toLocaleTimeString() },
+      { 'Metric': 'Total Sections', 'Value': targetTables.length },
+      { 'Metric': 'Total Records', 'Value': totalRecords },
+      { 'Metric': 'System Version', 'Value': '2.0' },
+      { 'Metric': 'Generated By', 'Value': 'Mavryck Events Admin' },
+      {},
+      { 'Metric': 'Section Breakdown', 'Value': '' },
+      ...tableStats
+    ];
+    
+    const overviewSheet = XLSX.utils.json_to_sheet(overviewData);
+    overviewSheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(workbook, overviewSheet, 'Overview');
+    
+    let processedTables = 0;
+    let processedRecords = 0;
+    
+    // Second pass: export actual data
+    for (const table of targetTables) {
+      try {
+        onProgress?.(
+          10 + Math.round((processedTables / targetTables.length) * 80), 
+          `Exporting ${table.displayName}...`,
+          { 
+            currentTable: table.displayName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
+        );
+        
+        let query = supabase.from(table.name).select('*');
+        
+        // Only add deleted_at filter for tables that have this column
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        if (tablesWithDeletedAt.includes(table.name)) {
           query = query.is('deleted_at', null);
         }
         
         const { data, error } = await query;
         
         if (error) {
-          console.error(`Error backing up ${table}:`, error);
-          // Continue with other tables even if one fails
+          console.error(`Error backing up ${table.name}:`, error);
           processedTables++;
           continue;
         }
         
-        backup.data[table] = data || [];
-        
-        // Add table data to Excel workbook
+        // Process and clean data for Excel
         if (data && data.length > 0) {
-          // Clean data for Excel export
-          const cleanData = data.map(row => {
-            const cleanRow: any = {};
+          const cleanData = data.map((row, index) => {
+            const cleanRow: any = { 'Row #': index + 1 };
+            
             Object.keys(row).forEach(key => {
               let value = row[key];
-              // Handle JSON fields
+              
+              // Handle different data types
               if (typeof value === 'object' && value !== null) {
-                value = JSON.stringify(value);
+                if (value instanceof Date) {
+                  value = value.toLocaleDateString();
+                } else {
+                  value = JSON.stringify(value);
+                }
               }
-              // Handle dates
-              if (value instanceof Date) {
-                value = value.toISOString();
+              
+              // Handle boolean values
+              if (typeof value === 'boolean') {
+                value = value ? 'Yes' : 'No';
               }
-              cleanRow[key] = value;
+              
+              // Handle null/undefined
+              if (value === null || value === undefined) {
+                value = '';
+              }
+              
+              // Format column names for better readability
+              const formattedKey = key
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase());
+              
+              cleanRow[formattedKey] = value;
             });
+            
             return cleanRow;
           });
           
           const worksheet = XLSX.utils.json_to_sheet(cleanData);
           
-          // Auto-size columns
+          // Auto-size columns with limits
           const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
           const colWidths: any[] = [];
+          
           for (let C = range.s.c; C <= range.e.c; ++C) {
             let maxWidth = 10;
             for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -513,49 +496,71 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
           }
           worksheet['!cols'] = colWidths;
           
-          // Truncate table name for Excel sheet name (max 31 chars)
-          const sheetName = table.replace(/_/g, ' ').substring(0, 31);
-          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+          // Add conditional formatting for status columns
+          if (table.name === 'event_requests') {
+            // Color code status column
+            for (let R = 1; R <= range.e.r; ++R) {
+              const statusCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 9 })]; // Assuming status is column 9
+              if (statusCell && statusCell.v) {
+                switch (statusCell.v.toString().toLowerCase()) {
+                  case 'pending':
+                    statusCell.s = { fill: { fgColor: { rgb: 'FFF3CD' } } };
+                    break;
+                  case 'ongoing':
+                    statusCell.s = { fill: { fgColor: { rgb: 'D1ECF1' } } };
+                    break;
+                  case 'completed':
+                    statusCell.s = { fill: { fgColor: { rgb: 'D4EDDA' } } };
+                    break;
+                }
+              }
+            }
+          }
+          
+          XLSX.utils.book_append_sheet(workbook, worksheet, table.displayName);
+          processedRecords += data.length;
         } else {
           // Add empty sheet for tables with no data
-          const emptySheet = XLSX.utils.json_to_sheet([{ 'No Data': 'This table contains no records' }]);
-          const sheetName = table.replace(/_/g, ' ').substring(0, 31);
-          XLSX.utils.book_append_sheet(workbook, emptySheet, sheetName);
+          const emptySheet = XLSX.utils.json_to_sheet([{ 
+            'Message': `No ${table.displayName.toLowerCase()} found`,
+            'Note': 'This section contains no records at the time of backup'
+          }]);
+          XLSX.utils.book_append_sheet(workbook, emptySheet, table.displayName);
         }
         
         processedTables++;
+        
+        // Update progress
+        onProgress?.(
+          10 + Math.round((processedTables / targetTables.length) * 80),
+          `Completed ${table.displayName}`,
+          { 
+            currentTable: table.displayName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
+        );
+        
       } catch (error) {
-        console.error(`Error processing ${table}:`, error);
+        console.error(`Error processing ${table.name}:`, error);
         processedTables++;
       }
     }
     
-    onProgress?.(90, 'Generating files...');
+    onProgress?.(95, 'Generating Excel file...', { recordsProcessed: processedRecords, totalRecords: totalRecords });
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().split('T')[0];
-    const excelFilename = `mavryck-events-backup-${timestamp}.xlsx`;
-    const jsonFilename = `mavryck-events-backup-${timestamp}.json`;
+    const timeString = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+    const filename = `mavryck-events-backup-${timestamp}-${timeString}.xlsx`;
     
     // Write Excel file
-    XLSX.writeFile(workbook, excelFilename);
+    XLSX.writeFile(workbook, filename);
     
-    // Also create JSON backup for import functionality
-    const backupJson = JSON.stringify(backup, null, 2);
-    const jsonBlob = new Blob([backupJson], { type: 'application/json' });
-    const jsonUrl = URL.createObjectURL(jsonBlob);
-    const jsonLink = document.createElement('a');
-    jsonLink.href = jsonUrl;
-    jsonLink.download = jsonFilename;
-    document.body.appendChild(jsonLink);
-    jsonLink.click();
-    document.body.removeChild(jsonLink);
-    URL.revokeObjectURL(jsonUrl);
+    onProgress?.(100, 'Backup completed successfully!', { recordsProcessed: processedRecords, totalRecords: totalRecords });
     
-    onProgress?.(100, 'Backup completed successfully!');
-    
-    toast.success('Database backup exported successfully as Excel and JSON files');
-    return backupJson;
+    toast.success(`Database backup exported successfully! ${processedRecords} records backed up.`);
+    return filename;
   } catch (error) {
     console.error('Backup export error:', error);
     toast.error('Failed to export backup');
@@ -564,131 +569,201 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
   }
 };
 
-// Enhanced import with progress indicators and better error handling
+// Enhanced import with progress indicators and XLSX support
 export const importDatabaseBackup = async (
-  backupData: string, 
-  onProgress?: (progress: number, status: string) => void
+  file: File, 
+  onProgress?: ProgressCallback
 ): Promise<boolean> => {
   try {
-    onProgress?.(0, 'Validating backup file...');
+    onProgress?.(0, 'Reading Excel file...', {});
     
-    let backup;
-    try {
-      backup = JSON.parse(backupData);
-    } catch (parseError) {
-      toast.error('Invalid JSON format in backup file');
-      onProgress?.(0, 'Invalid backup file format');
+    // Read the Excel file
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer);
+    
+    onProgress?.(10, 'Validating backup structure...', {});
+    
+    // Define expected sheets and their corresponding table names
+    const sheetMappings = [
+      { sheetName: 'Event Requests', tableName: 'event_requests' },
+      { sheetName: 'Contact Messages', tableName: 'contact_messages' },
+      { sheetName: 'Gallery Items', tableName: 'gallery' },
+      { sheetName: 'Products & Services', tableName: 'products' },
+      { sheetName: 'Customer Testimonials', tableName: 'testimonials' }
+    ];
+    
+    let totalRecords = 0;
+    const sheetsToProcess: any[] = [];
+    
+    // Validate and count records
+    for (const mapping of sheetMappings) {
+      if (workbook.SheetNames.includes(mapping.sheetName)) {
+        const worksheet = workbook.Sheets[mapping.sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Filter out empty rows and metadata rows
+        const validData = jsonData.filter((row: any) => {
+          return row && typeof row === 'object' && Object.keys(row).length > 1;
+        });
+        
+        if (validData.length > 0) {
+          sheetsToProcess.push({
+            ...mapping,
+            data: validData,
+            recordCount: validData.length
+          });
+          totalRecords += validData.length;
+        }
+      }
+    }
+    
+    if (sheetsToProcess.length === 0) {
+      toast.error('No valid data sheets found in backup file');
+      onProgress?.(0, 'No valid data found');
       return false;
     }
     
-    if (!backup.data || !backup.timestamp) {
-      toast.error('Invalid backup file format - missing required fields');
-      onProgress?.(0, 'Invalid backup file structure');
-      return false;
-    }
+    onProgress?.(20, `Found ${totalRecords} records to restore...`, { totalRecords });
     
-    const tables = Object.keys(backup.data);
-    let processedTables = 0;
+    let processedSheets = 0;
+    let processedRecords = 0;
     let successCount = 0;
     let errorCount = 0;
     
-    onProgress?.(10, 'Starting data restoration...');
-    
-    for (const [tableName, tableData] of Object.entries(backup.data)) {
-      if (!Array.isArray(tableData)) {
-        console.warn(`Skipping ${tableName} - not an array`);
-        processedTables++;
-        continue;
-      }
-      
+    for (const sheet of sheetsToProcess) {
       try {
         onProgress?.(
-          10 + Math.round((processedTables / tables.length) * 80), 
-          `Restoring ${tableName}...`
+          20 + Math.round((processedSheets / sheetsToProcess.length) * 70),
+          `Restoring ${sheet.sheetName}...`,
+          { 
+            currentTable: sheet.sheetName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
         );
         
-        // Check if table has deleted_at column for soft delete
-        const tablesWithDeletedAt = [
-          'event_requests', 'gallery', 'products', 'testimonials', 
-          'contact_messages', 'site_settings'
-        ];
+        // Convert Excel data back to database format
+        const dbData = sheet.data.map((row: any) => {
+          const dbRow: any = {};
+          
+          Object.keys(row).forEach(key => {
+            if (key === 'Row #') return; // Skip row number column
+            
+            // Convert formatted column names back to database format
+            const dbKey = key
+              .toLowerCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^a-z0-9_]/g, '');
+            
+            let value = row[key];
+            
+            // Handle boolean conversions
+            if (value === 'Yes') value = true;
+            if (value === 'No') value = false;
+            
+            // Handle empty strings
+            if (value === '') value = null;
+            
+            // Handle date fields
+            if (dbKey.includes('date') || dbKey.includes('created_at') || dbKey.includes('updated_at')) {
+              if (value && typeof value === 'string') {
+                try {
+                  const date = new Date(value);
+                  if (!isNaN(date.getTime())) {
+                    value = date.toISOString();
+                  }
+                } catch (e) {
+                  // Keep original value if date parsing fails
+                }
+              }
+            }
+            
+            dbRow[dbKey] = value;
+          });
+          
+          // Remove any undefined or invalid fields
+          Object.keys(dbRow).forEach(key => {
+            if (dbRow[key] === undefined || key === '') {
+              delete dbRow[key];
+            }
+          });
+          
+          return dbRow;
+        });
         
-        // Clear existing data (soft delete for supported tables, hard delete for others)
-        if (tablesWithDeletedAt.includes(tableName)) {
+        // Clear existing data (soft delete for supported tables)
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        
+        if (tablesWithDeletedAt.includes(sheet.tableName)) {
           await supabase
-            .from(tableName)
+            .from(sheet.tableName)
             .update({ deleted_at: new Date().toISOString() })
             .is('deleted_at', null);
-        } else {
-          // For tables without soft delete, we'll skip clearing to avoid data loss
-          console.log(`Skipping clear for ${tableName} - no soft delete support`);
         }
         
-        // Insert backup data in batches
-        if ((tableData as any[]).length > 0) {
-          const batchSize = 50; // Reduced batch size for better reliability
-          const batches = [];
-          
-          for (let i = 0; i < (tableData as any[]).length; i += batchSize) {
-            batches.push((tableData as any[]).slice(i, i + batchSize));
-          }
-          
-          let batchErrors = 0;
-          for (const batch of batches) {
-            try {
-              // Clean the data before inserting
-              const cleanBatch = batch.map(item => {
-                const cleanItem = { ...item };
-                // Remove any undefined values
-                Object.keys(cleanItem).forEach(key => {
-                  if (cleanItem[key] === undefined) {
-                    delete cleanItem[key];
-                  }
-                });
-                return cleanItem;
-              });
-              
-              const { error } = await supabase
-                .from(tableName)
-                .insert(cleanBatch);
-              
-              if (error) {
-                console.error(`Error restoring batch in ${tableName}:`, error);
-                batchErrors++;
-              }
-            } catch (batchError) {
-              console.error(`Batch error in ${tableName}:`, batchError);
-              batchErrors++;
-            }
-          }
-          
-          if (batchErrors === 0) {
-            successCount++;
-          } else {
-            errorCount++;
-            console.warn(`${tableName} had ${batchErrors} batch errors out of ${batches.length} batches`);
-          }
-        } else {
-          successCount++; // Empty table is considered successful
+        // Insert data in batches
+        const batchSize = 25; // Smaller batches for better reliability
+        const batches = [];
+        
+        for (let i = 0; i < dbData.length; i += batchSize) {
+          batches.push(dbData.slice(i, i + batchSize));
         }
+        
+        let batchErrors = 0;
+        for (const [batchIndex, batch] of batches.entries()) {
+          try {
+            const { error } = await supabase
+              .from(sheet.tableName)
+              .insert(batch);
+            
+            if (error) {
+              console.error(`Error restoring batch ${batchIndex + 1} in ${sheet.tableName}:`, error);
+              batchErrors++;
+            } else {
+              processedRecords += batch.length;
+              
+              // Update progress for each batch
+              onProgress?.(
+                20 + Math.round((processedRecords / totalRecords) * 70),
+                `Restoring ${sheet.sheetName}... (${processedRecords}/${totalRecords})`,
+                { 
+                  currentTable: sheet.sheetName,
+                  recordsProcessed: processedRecords,
+                  totalRecords: totalRecords
+                }
+              );
+            }
+          } catch (batchError) {
+            console.error(`Batch error in ${sheet.tableName}:`, batchError);
+            batchErrors++;
+          }
+        }
+        
+        if (batchErrors === 0) {
+          successCount++;
+        } else {
+          errorCount++;
+          console.warn(`${sheet.sheetName} had ${batchErrors} batch errors out of ${batches.length} batches`);
+        }
+        
       } catch (error) {
-        console.error(`Error processing ${tableName}:`, error);
+        console.error(`Error processing ${sheet.sheetName}:`, error);
         errorCount++;
       }
       
-      processedTables++;
+      processedSheets++;
     }
     
-    onProgress?.(100, 'Restoration completed!');
+    onProgress?.(100, 'Restoration completed!', { recordsProcessed: processedRecords, totalRecords: totalRecords });
     
     if (successCount > 0) {
-      toast.success(`Database restored successfully. ${successCount} tables restored.`);
+      toast.success(`Database restored successfully! ${processedRecords} records restored from ${successCount} sections.`);
       if (errorCount > 0) {
-        toast.error(`${errorCount} tables had errors during restore. Check console for details.`);
+        toast.error(`${errorCount} sections had errors during restore. Check console for details.`);
       }
       return true;
     } else {
-      toast.error('Failed to restore database - no tables were successfully restored');
+      toast.error('Failed to restore database - no sections were successfully restored');
       return false;
     }
   } catch (error) {
