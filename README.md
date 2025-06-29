@@ -19,7 +19,7 @@
 - **Progressive Web App** capabilities
 
 ### 🔐 Security Features
-- **Secure admin authentication** with bcrypt password hashing
+- **Secure admin authentication** with Supabase Auth
 - **Rate limiting** (5 attempts per 15 minutes)
 - **Session management** with 30-minute timeout
 - **CSRF protection** with token validation
@@ -73,7 +73,7 @@
 - **Automated migrations** for schema management
 
 ### Security & Validation
-- **bcryptjs** for password hashing
+- **Supabase Auth** for authentication
 - **Input validation** with custom schemas
 - **Rate limiting** implementation
 - **CSRF protection** mechanisms
@@ -89,7 +89,7 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/mavryck-events.git
+git clone https://github.com/kailash-gupta/mavryck-events.git
 cd mavryck-events
 ```
 
@@ -129,17 +129,52 @@ The application will be available at `http://localhost:5173`
 
 ---
 
+## 🚀 Deployment
+
+### Vercel Deployment
+
+This project is optimized for deployment on Vercel:
+
+1. **Connect to Vercel:**
+   - Push your code to GitHub
+   - Connect your repository to Vercel
+   - Vercel will automatically detect the Vite configuration
+
+2. **Environment Variables:**
+   Set the following environment variables in your Vercel dashboard:
+   ```
+   VITE_SUPABASE_URL=your_supabase_project_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+3. **Build Settings:**
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm install`
+
+4. **Deploy:**
+   Vercel will automatically build and deploy your application.
+
+### Other Platforms
+
+The application can also be deployed to:
+- **Netlify:** Use the same build settings
+- **AWS Amplify:** Configure with the Vite build settings
+- **Firebase Hosting:** Build and deploy the `dist` folder
+
+---
+
 ## 🔑 Admin Access
 
 ### Default Admin Credentials
 - **Email:** `admin@mavryckevents.com`
-- **Password:** `mavryck_events@admin0000`
+- **Password:** Set up through Supabase Auth
 
 ### Security Features
 - **Rate Limiting:** 5 failed attempts result in 15-minute lockout
 - **Session Timeout:** Automatic logout after 30 minutes of inactivity
 - **Activity Monitoring:** Real-time tracking of user interactions
-- **Secure Password Storage:** bcrypt hashing with salt rounds
+- **Secure Password Storage:** Supabase Auth with bcrypt hashing
 - **CSRF Protection:** Token-based request validation
 
 ---
@@ -176,7 +211,7 @@ supabase/
 ## 🔒 Security Implementation
 
 ### Authentication Security
-- **Password Hashing:** bcrypt with 12 salt rounds
+- **Supabase Auth:** Industry-standard authentication
 - **Session Management:** Secure token-based sessions
 - **Rate Limiting:** Prevents brute force attacks
 - **Input Validation:** Comprehensive sanitization
@@ -241,58 +276,6 @@ supabase/
 
 ---
 
-## 🚀 Production Deployment
-
-### Build for Production
-```bash
-npm run build
-```
-
-### Environment Variables (Production)
-```env
-VITE_SUPABASE_URL=your_production_supabase_url
-VITE_SUPABASE_ANON_KEY=your_production_anon_key
-NODE_ENV=production
-```
-
-### Security Checklist
-- [x] HTTPS enabled
-- [x] Environment variables secured
-- [x] Database RLS policies active
-- [x] Rate limiting configured
-- [x] Security headers implemented
-- [x] Error logging configured
-- [x] Backup procedures established
-- [x] Admin credentials secured
-- [x] Anonymous form access enabled
-- [x] Input validation implemented
-- [x] CSRF protection active
-- [x] Session management secure
-
-### Performance Optimization
-- **Code Splitting:** Lazy loading for admin routes
-- **Image Optimization:** WebP format with fallbacks
-- **Caching Strategy:** Browser and CDN caching
-- **Bundle Analysis:** Optimized bundle sizes
-- **Database Indexing:** Query performance optimization
-
----
-
-## 🧪 Testing
-
-### Run Tests
-```bash
-npm run test
-```
-
-### Test Coverage
-- **Unit Tests:** Component and utility testing
-- **Integration Tests:** Database and API testing
-- **Security Tests:** Authentication and validation testing
-- **E2E Tests:** Complete user flow testing
-
----
-
 ## 📱 Responsive Design
 
 ### Breakpoints
@@ -317,8 +300,6 @@ npm run dev              # Start development server
 npm run build           # Build for production
 npm run preview         # Preview production build
 npm run lint            # Run ESLint
-npm run test            # Run tests
-npm run test:ui         # Run tests with UI
 ```
 
 ---
@@ -377,15 +358,7 @@ For support and inquiries:
 - ✅ Performance optimization and indexing
 - ✅ Production-ready security measures
 - ✅ Enhanced error handling and validation
-
-### v1.0.0 (Previous)
-- ✅ Complete authentication system with security features
-- ✅ Full admin dashboard with CRUD operations
-- ✅ Advanced data export and backup functionality
-- ✅ Responsive design with mobile optimization
-- ✅ Basic security implementation
-- ✅ Comprehensive error handling and logging
-- ✅ Real-time data synchronization
+- ✅ Vercel deployment optimization
 
 ---
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   updateUserPassword, 
-  getCurrentUser,
   exportDatabaseBackup,
   importDatabaseBackup,
   updateGooglePhotosUrl,
@@ -20,7 +19,6 @@ interface BackupProgress {
 }
 
 const AdminSettings: React.FC = () => {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [googlePhotosUrl, setGooglePhotosUrl] = useState('');
@@ -64,7 +62,6 @@ const AdminSettings: React.FC = () => {
     try {
       const success = await updateUserPassword(newPassword);
       if (success) {
-        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       }

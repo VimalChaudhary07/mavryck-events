@@ -5,13 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      }
-    }
+    host: true
   },
   build: {
     // Optimize build for production
@@ -55,14 +49,11 @@ export default defineConfig({
   },
   // Enable CSS code splitting
   css: {
-    devSourcemap: true,
-    modules: {
-      localsConvention: 'camelCase'
-    }
+    devSourcemap: true
   },
   // Define environment variables for build optimization
   define: {
-    __DEV__: JSON.stringify(!process.env.NODE_ENV || process.env.NODE_ENV === 'development'),
+    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
     __PROD__: JSON.stringify(process.env.NODE_ENV === 'production')
   }
 });
