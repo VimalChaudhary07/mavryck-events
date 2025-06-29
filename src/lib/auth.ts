@@ -1,10 +1,7 @@
 import { supabase } from './supabase';
-import bcrypt from 'bcryptjs';
 import toast from 'react-hot-toast';
-
-// Admin credentials - in production, these should be environment variables
-const ADMIN_EMAIL = 'admin@mavryckevents.com';
-const ADMIN_PASSWORD = 'mavryck_events@admin0000';
+import { validateEmail } from '../utils/validation';
+import * as XLSX from 'xlsx';
 
 // Security configuration
 const SECURITY_CONFIG = {
@@ -19,6 +16,14 @@ interface LoginAttempt {
   timestamp: number;
   success: boolean;
   ip?: string;
+}
+
+interface ProgressCallback {
+  (progress: number, status: string, details?: {
+    currentTable?: string;
+    recordsProcessed?: number;
+    totalRecords?: number;
+  }): void;
 }
 
 // In-memory storage for login attempts (in production, use Redis or database)
@@ -54,12 +59,7 @@ const recordLoginAttempt = (email: string, success: boolean): void => {
   console.log(`Login attempt: ${email}, Success: ${success}, Time: ${new Date().toISOString()}`);
 };
 
-// Input validation
-const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim().toLowerCase());
-};
-
+// Simple input sanitization
 const sanitizeInput = (input: string): string => {
   return input.trim().replace(/[<>\"'&]/g, '');
 };
@@ -126,77 +126,51 @@ export const isAuthenticated = (): boolean => {
 
 export const login = async (email: string, password: string): Promise<boolean> => {
   try {
-    // Input validation and sanitization
-    const sanitizedEmail = sanitizeInput(email).toLowerCase();
-    const sanitizedPassword = sanitizeInput(password);
+    // Simple sanitization - just trim and lowercase
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = sanitizeInput(password);
     
-    if (!validateEmail(sanitizedEmail)) {
+    if (!validateEmail(cleanEmail)) {
       toast.error('Invalid email format');
-      recordLoginAttempt(sanitizedEmail, false);
+      recordLoginAttempt(cleanEmail, false);
       return false;
     }
     
     // Check rate limiting
-    if (isRateLimited(sanitizedEmail)) {
+    if (isRateLimited(cleanEmail)) {
       toast.error('Too many failed attempts. Please try again in 15 minutes.');
       return false;
     }
     
-    // Verify credentials
-    if (sanitizedEmail !== ADMIN_EMAIL || sanitizedPassword !== ADMIN_PASSWORD) {
-      toast.error('Invalid credentials');
-      recordLoginAttempt(sanitizedEmail, false);
-      return false;
-    }
-    
-    // Authenticate with Supabase
+    // Authenticate with Supabase directly
     try {
-      // Try to sign in first
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword
       });
       
-      if (signInError) {
-        // If sign in fails, try to sign up (for first time setup)
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: ADMIN_EMAIL,
-          password: ADMIN_PASSWORD,
-          options: {
-            emailRedirectTo: undefined // Disable email confirmation
-          }
-        });
-        
-        if (signUpError && !signUpError.message.includes('already registered')) {
-          console.error('Authentication setup failed:', signUpError);
-          toast.error('Authentication setup failed. Please try again.');
-          recordLoginAttempt(sanitizedEmail, false);
-          return false;
-        }
-        
-        // Try to sign in again after signup
-        const { error: retrySignInError } = await supabase.auth.signInWithPassword({
-          email: ADMIN_EMAIL,
-          password: ADMIN_PASSWORD
-        });
-        
-        if (retrySignInError) {
-          console.error('Sign in after signup failed:', retrySignInError);
-          toast.error('Authentication failed. Please try again.');
-          recordLoginAttempt(sanitizedEmail, false);
-          return false;
-        }
+      if (error) {
+        console.error('Authentication failed:', error);
+        toast.error('Invalid credentials');
+        recordLoginAttempt(cleanEmail, false);
+        return false;
+      }
+      
+      if (!data.user) {
+        toast.error('Authentication failed');
+        recordLoginAttempt(cleanEmail, false);
+        return false;
       }
       
       // Create secure session
-      createSecureSession(sanitizedEmail);
-      recordLoginAttempt(sanitizedEmail, true);
+      createSecureSession(cleanEmail);
+      recordLoginAttempt(cleanEmail, true);
       toast.success('Welcome back, Admin!');
       return true;
       
     } catch (error) {
       console.error('Supabase authentication error:', error);
-      recordLoginAttempt(sanitizedEmail, false);
+      recordLoginAttempt(cleanEmail, false);
       toast.error('Authentication service unavailable. Please try again.');
       return false;
     }
@@ -259,7 +233,7 @@ export const getLoginAttemptStats = () => {
     totalAttempts: recentAttempts.length,
     failedAttempts: recentAttempts.filter(a => !a.success).length,
     successfulAttempts: recentAttempts.filter(a => a.success).length,
-    isLocked: isRateLimited(ADMIN_EMAIL)
+    isLocked: false // Remove hardcoded email dependency
   };
 };
 
@@ -297,8 +271,8 @@ export const initializeAuth = async (): Promise<boolean> => {
       return false;
     }
     
-    if (data.session && data.session.user?.email === ADMIN_EMAIL) {
-      createSecureSession(ADMIN_EMAIL);
+    if (data.session && data.session.user?.email) {
+      createSecureSession(data.session.user.email);
       return true;
     }
     
@@ -306,5 +280,562 @@ export const initializeAuth = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Auth initialization failed:', error);
     return false;
+  }
+};
+
+// Get current user
+export const getCurrentUser = async () => {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Failed to get current user:', error);
+      return null;
+    }
+    return data.user;
+  } catch (error) {
+    console.error('Get user error:', error);
+    return null;
+  }
+};
+
+// Update user password
+export const updateUserPassword = async (newPassword: string): Promise<boolean> => {
+  try {
+    // Validate password strength
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return false;
+    }
+    
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    
+    if (error) {
+      console.error('Password update error:', error);
+      
+      if (error.message.includes('password_too_short')) {
+        toast.error('Password is too short. Please use at least 6 characters.');
+      } else if (error.message.includes('password_too_weak')) {
+        toast.error('Password is too weak. Please use a stronger password.');
+      } else {
+        toast.error(`Failed to update password: ${error.message}`);
+      }
+      return false;
+    }
+    
+    toast.success('Password updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Password update error:', error);
+    toast.error('Failed to update password');
+    return false;
+  }
+};
+
+// Enhanced backup export to Excel with real-time progress indicators
+export const exportDatabaseBackup = async (onProgress?: ProgressCallback): Promise<string | null> => {
+  try {
+    // Define the specific tables we want to backup
+    const targetTables = [
+      { name: 'event_requests', displayName: 'Event Requests' },
+      { name: 'contact_messages', displayName: 'Contact Messages' },
+      { name: 'gallery', displayName: 'Gallery Items' },
+      { name: 'products', displayName: 'Products & Services' },
+      { name: 'testimonials', displayName: 'Customer Testimonials' }
+    ];
+    
+    onProgress?.(0, 'Initializing enhanced backup...', { totalRecords: targetTables.length });
+    
+    // Create Excel workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Add overview/metadata sheet first
+    onProgress?.(5, 'Creating overview sheet...', { currentTable: 'Overview' });
+    
+    let totalRecords = 0;
+    const tableStats: any[] = [];
+    
+    // First pass: collect statistics
+    for (const table of targetTables) {
+      try {
+        let query = supabase.from(table.name).select('*', { count: 'exact', head: true });
+        
+        // Only add deleted_at filter for tables that have this column
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        if (tablesWithDeletedAt.includes(table.name)) {
+          query = query.is('deleted_at', null);
+        }
+        
+        const { count, error } = await query;
+        
+        if (!error && count !== null) {
+          totalRecords += count;
+          tableStats.push({
+            'Section': table.displayName,
+            'Records': count,
+            'Status': count > 0 ? 'Has Data' : 'Empty',
+            'Last Updated': new Date().toLocaleDateString()
+          });
+        }
+      } catch (error) {
+        console.warn(`Failed to get count for ${table.name}:`, error);
+        tableStats.push({
+          'Section': table.displayName,
+          'Records': 0,
+          'Status': 'Error',
+          'Last Updated': 'N/A'
+        });
+      }
+    }
+    
+    // Create overview sheet
+    const overviewData = [
+      { 'Metric': 'Backup Date', 'Value': new Date().toLocaleDateString() },
+      { 'Metric': 'Backup Time', 'Value': new Date().toLocaleTimeString() },
+      { 'Metric': 'Total Sections', 'Value': targetTables.length },
+      { 'Metric': 'Total Records', 'Value': totalRecords },
+      { 'Metric': 'System Version', 'Value': '2.0' },
+      { 'Metric': 'Generated By', 'Value': 'Mavryck Events Admin' },
+      {},
+      { 'Metric': 'Section Breakdown', 'Value': '' },
+      ...tableStats
+    ];
+    
+    const overviewSheet = XLSX.utils.json_to_sheet(overviewData);
+    overviewSheet['!cols'] = [{ wch: 25 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(workbook, overviewSheet, 'Overview');
+    
+    let processedTables = 0;
+    let processedRecords = 0;
+    
+    // Second pass: export actual data
+    for (const table of targetTables) {
+      try {
+        onProgress?.(
+          10 + Math.round((processedTables / targetTables.length) * 80), 
+          `Exporting ${table.displayName}...`,
+          { 
+            currentTable: table.displayName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
+        );
+        
+        let query = supabase.from(table.name).select('*');
+        
+        // Only add deleted_at filter for tables that have this column
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        if (tablesWithDeletedAt.includes(table.name)) {
+          query = query.is('deleted_at', null);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) {
+          console.error(`Error backing up ${table.name}:`, error);
+          processedTables++;
+          continue;
+        }
+        
+        // Process and clean data for Excel
+        if (data && data.length > 0) {
+          const cleanData = data.map((row, index) => {
+            const cleanRow: any = { 'Row #': index + 1 };
+            
+            Object.keys(row).forEach(key => {
+              let value = row[key];
+              
+              // Handle different data types
+              if (typeof value === 'object' && value !== null) {
+                if (value instanceof Date) {
+                  value = value.toLocaleDateString();
+                } else {
+                  value = JSON.stringify(value);
+                }
+              }
+              
+              // Handle boolean values
+              if (typeof value === 'boolean') {
+                value = value ? 'Yes' : 'No';
+              }
+              
+              // Handle null/undefined
+              if (value === null || value === undefined) {
+                value = '';
+              }
+              
+              // Format column names for better readability
+              const formattedKey = key
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase());
+              
+              cleanRow[formattedKey] = value;
+            });
+            
+            return cleanRow;
+          });
+          
+          const worksheet = XLSX.utils.json_to_sheet(cleanData);
+          
+          // Auto-size columns with limits
+          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+          const colWidths: any[] = [];
+          
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            let maxWidth = 10;
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+              const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+              const cell = worksheet[cellAddress];
+              if (cell && cell.v) {
+                const cellLength = cell.v.toString().length;
+                maxWidth = Math.max(maxWidth, Math.min(cellLength, 50));
+              }
+            }
+            colWidths[C] = { wch: maxWidth };
+          }
+          worksheet['!cols'] = colWidths;
+          
+          // Add conditional formatting for status columns
+          if (table.name === 'event_requests') {
+            // Color code status column
+            for (let R = 1; R <= range.e.r; ++R) {
+              const statusCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 9 })]; // Assuming status is column 9
+              if (statusCell && statusCell.v) {
+                switch (statusCell.v.toString().toLowerCase()) {
+                  case 'pending':
+                    statusCell.s = { fill: { fgColor: { rgb: 'FFF3CD' } } };
+                    break;
+                  case 'ongoing':
+                    statusCell.s = { fill: { fgColor: { rgb: 'D1ECF1' } } };
+                    break;
+                  case 'completed':
+                    statusCell.s = { fill: { fgColor: { rgb: 'D4EDDA' } } };
+                    break;
+                }
+              }
+            }
+          }
+          
+          XLSX.utils.book_append_sheet(workbook, worksheet, table.displayName);
+          processedRecords += data.length;
+        } else {
+          // Add empty sheet for tables with no data
+          const emptySheet = XLSX.utils.json_to_sheet([{ 
+            'Message': `No ${table.displayName.toLowerCase()} found`,
+            'Note': 'This section contains no records at the time of backup'
+          }]);
+          XLSX.utils.book_append_sheet(workbook, emptySheet, table.displayName);
+        }
+        
+        processedTables++;
+        
+        // Update progress
+        onProgress?.(
+          10 + Math.round((processedTables / targetTables.length) * 80),
+          `Completed ${table.displayName}`,
+          { 
+            currentTable: table.displayName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
+        );
+        
+      } catch (error) {
+        console.error(`Error processing ${table.name}:`, error);
+        processedTables++;
+      }
+    }
+    
+    onProgress?.(95, 'Generating Excel file...', { recordsProcessed: processedRecords, totalRecords: totalRecords });
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const timeString = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+    const filename = `mavryck-events-backup-${timestamp}-${timeString}.xlsx`;
+    
+    // Write Excel file
+    XLSX.writeFile(workbook, filename);
+    
+    onProgress?.(100, 'Backup completed successfully!', { recordsProcessed: processedRecords, totalRecords: totalRecords });
+    
+    toast.success(`Database backup exported successfully! ${processedRecords} records backed up.`);
+    return filename;
+  } catch (error) {
+    console.error('Backup export error:', error);
+    toast.error('Failed to export backup');
+    onProgress?.(0, 'Backup failed');
+    return null;
+  }
+};
+
+// Enhanced import with progress indicators and XLSX support
+export const importDatabaseBackup = async (
+  file: File, 
+  onProgress?: ProgressCallback
+): Promise<boolean> => {
+  try {
+    onProgress?.(0, 'Reading Excel file...', {});
+    
+    // Read the Excel file
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer);
+    
+    onProgress?.(10, 'Validating backup structure...', {});
+    
+    // Define expected sheets and their corresponding table names
+    const sheetMappings = [
+      { sheetName: 'Event Requests', tableName: 'event_requests' },
+      { sheetName: 'Contact Messages', tableName: 'contact_messages' },
+      { sheetName: 'Gallery Items', tableName: 'gallery' },
+      { sheetName: 'Products & Services', tableName: 'products' },
+      { sheetName: 'Customer Testimonials', tableName: 'testimonials' }
+    ];
+    
+    let totalRecords = 0;
+    const sheetsToProcess: any[] = [];
+    
+    // Validate and count records
+    for (const mapping of sheetMappings) {
+      if (workbook.SheetNames.includes(mapping.sheetName)) {
+        const worksheet = workbook.Sheets[mapping.sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Filter out empty rows and metadata rows
+        const validData = jsonData.filter((row: any) => {
+          return row && typeof row === 'object' && Object.keys(row).length > 1;
+        });
+        
+        if (validData.length > 0) {
+          sheetsToProcess.push({
+            ...mapping,
+            data: validData,
+            recordCount: validData.length
+          });
+          totalRecords += validData.length;
+        }
+      }
+    }
+    
+    if (sheetsToProcess.length === 0) {
+      toast.error('No valid data sheets found in backup file');
+      onProgress?.(0, 'No valid data found');
+      return false;
+    }
+    
+    onProgress?.(20, `Found ${totalRecords} records to restore...`, { totalRecords });
+    
+    let processedSheets = 0;
+    let processedRecords = 0;
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const sheet of sheetsToProcess) {
+      try {
+        onProgress?.(
+          20 + Math.round((processedSheets / sheetsToProcess.length) * 70),
+          `Restoring ${sheet.sheetName}...`,
+          { 
+            currentTable: sheet.sheetName,
+            recordsProcessed: processedRecords,
+            totalRecords: totalRecords
+          }
+        );
+        
+        // Convert Excel data back to database format
+        const dbData = sheet.data.map((row: any) => {
+          const dbRow: any = {};
+          
+          Object.keys(row).forEach(key => {
+            if (key === 'Row #') return; // Skip row number column
+            
+            // Convert formatted column names back to database format
+            const dbKey = key
+              .toLowerCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^a-z0-9_]/g, '');
+            
+            let value = row[key];
+            
+            // Handle boolean conversions
+            if (value === 'Yes') value = true;
+            if (value === 'No') value = false;
+            
+            // Handle empty strings
+            if (value === '') value = null;
+            
+            // Handle date fields
+            if (dbKey.includes('date') || dbKey.includes('created_at') || dbKey.includes('updated_at')) {
+              if (value && typeof value === 'string') {
+                try {
+                  const date = new Date(value);
+                  if (!isNaN(date.getTime())) {
+                    value = date.toISOString();
+                  }
+                } catch (e) {
+                  // Keep original value if date parsing fails
+                }
+              }
+            }
+            
+            dbRow[dbKey] = value;
+          });
+          
+          // Remove any undefined or invalid fields
+          Object.keys(dbRow).forEach(key => {
+            if (dbRow[key] === undefined || key === '') {
+              delete dbRow[key];
+            }
+          });
+          
+          return dbRow;
+        });
+        
+        // Clear existing data (soft delete for supported tables)
+        const tablesWithDeletedAt = ['event_requests', 'gallery', 'products', 'testimonials', 'contact_messages'];
+        
+        if (tablesWithDeletedAt.includes(sheet.tableName)) {
+          await supabase
+            .from(sheet.tableName)
+            .update({ deleted_at: new Date().toISOString() })
+            .is('deleted_at', null);
+        }
+        
+        // Insert data in batches
+        const batchSize = 25; // Smaller batches for better reliability
+        const batches = [];
+        
+        for (let i = 0; i < dbData.length; i += batchSize) {
+          batches.push(dbData.slice(i, i + batchSize));
+        }
+        
+        let batchErrors = 0;
+        for (const [batchIndex, batch] of batches.entries()) {
+          try {
+            const { error } = await supabase
+              .from(sheet.tableName)
+              .insert(batch);
+            
+            if (error) {
+              console.error(`Error restoring batch ${batchIndex + 1} in ${sheet.tableName}:`, error);
+              batchErrors++;
+            } else {
+              processedRecords += batch.length;
+              
+              // Update progress for each batch
+              onProgress?.(
+                20 + Math.round((processedRecords / totalRecords) * 70),
+                `Restoring ${sheet.sheetName}... (${processedRecords}/${totalRecords})`,
+                { 
+                  currentTable: sheet.sheetName,
+                  recordsProcessed: processedRecords,
+                  totalRecords: totalRecords
+                }
+              );
+            }
+          } catch (batchError) {
+            console.error(`Batch error in ${sheet.tableName}:`, batchError);
+            batchErrors++;
+          }
+        }
+        
+        if (batchErrors === 0) {
+          successCount++;
+        } else {
+          errorCount++;
+          console.warn(`${sheet.sheetName} had ${batchErrors} batch errors out of ${batches.length} batches`);
+        }
+        
+      } catch (error) {
+        console.error(`Error processing ${sheet.sheetName}:`, error);
+        errorCount++;
+      }
+      
+      processedSheets++;
+    }
+    
+    onProgress?.(100, 'Restoration completed!', { recordsProcessed: processedRecords, totalRecords: totalRecords });
+    
+    if (successCount > 0) {
+      toast.success(`Database restored successfully! ${processedRecords} records restored from ${successCount} sections.`);
+      if (errorCount > 0) {
+        toast.error(`${errorCount} sections had errors during restore. Check console for details.`);
+      }
+      return true;
+    } else {
+      toast.error('Failed to restore database - no sections were successfully restored');
+      return false;
+    }
+  } catch (error) {
+    console.error('Backup import error:', error);
+    toast.error('Failed to import backup. Please check the file format.');
+    onProgress?.(0, 'Import failed');
+    return false;
+  }
+};
+
+// Site settings functions
+export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
+  try {
+    if (!url.trim()) {
+      toast.error('Please enter a URL');
+      return false;
+    }
+    
+    // Get existing settings or create new one
+    const { data: existingSettings } = await supabase
+      .from('site_settings')
+      .select('*')
+      .limit(1)
+      .single();
+    
+    if (existingSettings) {
+      const { error } = await supabase
+        .from('site_settings')
+        .update({ google_photos_url: url.trim() })
+        .eq('id', existingSettings.id);
+      
+      if (error) {
+        console.error('Error updating Google Photos URL:', error);
+        toast.error('Failed to update Google Photos URL');
+        return false;
+      }
+    } else {
+      const { error } = await supabase
+        .from('site_settings')
+        .insert({ google_photos_url: url.trim() });
+      
+      if (error) {
+        console.error('Error creating site settings:', error);
+        toast.error('Failed to save Google Photos URL');
+        return false;
+      }
+    }
+    
+    toast.success('Gallery URL updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Google Photos URL update error:', error);
+    toast.error('Failed to update Gallery URL');
+    return false;
+  }
+};
+
+export const getGooglePhotosUrl = async (): Promise<string> => {
+  try {
+    const { data, error } = await supabase
+      .from('site_settings')
+      .select('google_photos_url')
+      .limit(1)
+      .single();
+    
+    if (error || !data) {
+      return 'https://photos.google.com/share/your-album-link';
+    }
+    
+    return data.google_photos_url || 'https://photos.google.com/share/your-album-link';
+  } catch (error) {
+    console.error('Error fetching Google Photos URL:', error);
+    return 'https://photos.google.com/share/your-album-link';
   }
 };

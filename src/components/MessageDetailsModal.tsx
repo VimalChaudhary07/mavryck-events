@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, Mail, User, MessageSquare, Clock } from 'lucide-react';
+import { X, User, MessageSquare, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { ContactMessage } from '../types/supabase';
 

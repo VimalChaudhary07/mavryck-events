@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Not Found - Mavryck Events</title>
+    <meta name="description" content="The page you're looking for doesn't exist. Return to Mavryck Events homepage for professional event planning services.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://mavryckevents.com/">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1f2937 0%, #000000 50%, #1f2937 100%);
+            color: white;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 6rem;
+            margin: 0;
+            background: linear-gradient(45deg, #f97316, #dc2626);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        h2 {
+            font-size: 2rem;
+            margin: 1rem 0;
+            color: #f3f4f6;
+        }
+        p {
+            font-size: 1.1rem;
+            color: #d1d5db;
+            margin: 1.5rem 0;
+            line-height: 1.6;
+        }
+        .btn {
+            display: inline-block;
+            background: linear-gradient(45deg, #f97316, #dc2626);
+            color: white;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            margin: 1rem 0.5rem;
+            transition: transform 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .contact-info {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #374151;
+        }
+        .contact-info a {
+            color: #f97316;
+            text-decoration: none;
+        }
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>404</h1>
+        <h2>Page Not Found</h2>
+        <p>
+            Oops! The page you're looking for doesn't exist. It might have been moved, deleted, or you entered the wrong URL.
+        </p>
+        <p>
+            Don't worry, you can still explore our amazing event planning services!
+        </p>
+        
+        <a href="/" class="btn">Return Home</a>
+        <a href="/#contact" class="btn">Contact Us</a>
+        
+        <div class="contact-info">
+            <p>
+                <strong>Need immediate assistance?</strong><br>
+                Call us at <a href="tel:+917045712235">+91 7045712235</a><br>
+                Email: <a href="mailto:mavryckevents@gmail.com">mavryckevents@gmail.com</a><br>
+                Follow us: <a href="https://www.instagram.com/mavryck_events" target="_blank">@mavryck_events</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'GA_MEASUREMENT_ID');
+        
+        // Track 404 errors
+        gtag('event', 'page_view', {
+            page_title: '404 - Page Not Found',
+            page_location: window.location.href
+        });
+    </script>
+</body>
+</html>

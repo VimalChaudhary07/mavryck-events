@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, X, Calendar } from 'lucide-react';
 import { Link } from './Link';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -49,15 +49,6 @@ export function Navbar() {
       }
     }
     setIsOpen(false); // Close mobile menu
-  };
-
-  const handleNavClick = (href: string) => {
-    if (href.startsWith('#')) {
-      const sectionId = href.substring(1);
-      scrollToSection(sectionId);
-    } else {
-      setIsOpen(false);
-    }
   };
 
   const handleHomeClick = () => {
@@ -154,7 +145,7 @@ export function Navbar() {
             </button>
             <button
               onClick={() => scrollToSection('services')}
-              className="block w-full text-left px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
+              className="block w-full text-left px-3 py-2  text-base font-medium text-gray-300 hover:text-orange-500 transition-colors duration-200"
             >
               Services
             </button>

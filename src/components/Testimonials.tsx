@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Star, Quote, Loader } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getTestimonials } from '../lib/database';
@@ -103,7 +103,7 @@ export function Testimonials() {
           viewport={{ once: true }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
-          {testimonials.map((testimonial, index) => (
+          {testimonials.map((testimonial) => (
             <motion.div
               key={testimonial.id}
               variants={itemVariants}

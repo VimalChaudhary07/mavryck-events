@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Star, ArrowRight, ArrowLeft, ExternalLink, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGalleryItems, getProducts } from '../lib/database';
@@ -154,7 +154,7 @@ export function GalleryAndProducts() {
               viewport={{ once: true }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-8"
             >
-              {products.map((product, index) => (
+              {products.map((product) => (
                 <motion.div
                   key={product.id}
                   variants={itemVariants}
