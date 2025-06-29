@@ -440,7 +440,7 @@ export const exportDatabaseBackup = async (onProgress?: ProgressCallback): Promi
         
         // Process and clean data for Excel
         if (data && data.length > 0) {
-          const cleanData = data.map((row, index) => {
+          const cleanData = data.map((row: any, index: number) => {
             const cleanRow: any = { 'Row #': index + 1 };
             
             Object.keys(row).forEach(key => {
@@ -495,27 +495,6 @@ export const exportDatabaseBackup = async (onProgress?: ProgressCallback): Promi
             colWidths[C] = { wch: maxWidth };
           }
           worksheet['!cols'] = colWidths;
-          
-          // Add conditional formatting for status columns
-          if (table.name === 'event_requests') {
-            // Color code status column
-            for (let R = 1; R <= range.e.r; ++R) {
-              const statusCell = worksheet[XLSX.utils.encode_cell({ r: R, c: 9 })]; // Assuming status is column 9
-              if (statusCell && statusCell.v) {
-                switch (statusCell.v.toString().toLowerCase()) {
-                  case 'pending':
-                    statusCell.s = { fill: { fgColor: { rgb: 'FFF3CD' } } };
-                    break;
-                  case 'ongoing':
-                    statusCell.s = { fill: { fgColor: { rgb: 'D1ECF1' } } };
-                    break;
-                  case 'completed':
-                    statusCell.s = { fill: { fgColor: { rgb: 'D4EDDA' } } };
-                    break;
-                }
-              }
-            }
-          }
           
           XLSX.utils.book_append_sheet(workbook, worksheet, table.displayName);
           processedRecords += data.length;
