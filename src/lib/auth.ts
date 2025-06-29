@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import toast from 'react-hot-toast';
+import { validateEmail } from '../utils/validation';
+import * as XLSX from 'xlsx';
 
 // Security configuration
 const SECURITY_CONFIG = {
@@ -49,36 +51,9 @@ const recordLoginAttempt = (email: string, success: boolean): void => {
   console.log(`Login attempt: ${email}, Success: ${success}, Time: ${new Date().toISOString()}`);
 };
 
-// Enhanced input validation and sanitization
-const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  return emailRegex.test(email.trim().toLowerCase());
-};
-
+// Simple input sanitization
 const sanitizeInput = (input: string): string => {
   return input.trim().replace(/[<>\"'&]/g, '');
-};
-
-// Enhanced email sanitization for Supabase compatibility
-const sanitizeEmailForSupabase = (email: string): string => {
-  // Remove all whitespace and convert to lowercase
-  let sanitized = email.replace(/\s+/g, '').toLowerCase();
-  
-  // Remove any non-standard characters that might cause issues
-  sanitized = sanitized.replace(/[^\w@.-]/g, '');
-  
-  // Ensure proper email format
-  const emailParts = sanitized.split('@');
-  if (emailParts.length === 2) {
-    const [localPart, domain] = emailParts;
-    // Clean local part - remove consecutive dots and leading/trailing dots
-    const cleanLocal = localPart.replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '');
-    // Clean domain part
-    const cleanDomain = domain.replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '');
-    sanitized = `${cleanLocal}@${cleanDomain}`;
-  }
-  
-  return sanitized;
 };
 
 // Session management
@@ -143,18 +118,18 @@ export const isAuthenticated = (): boolean => {
 
 export const login = async (email: string, password: string): Promise<boolean> => {
   try {
-    // Input validation and sanitization
-    const sanitizedEmail = sanitizeInput(email).toLowerCase();
-    const sanitizedPassword = sanitizeInput(password);
+    // Simple sanitization - just trim and lowercase
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = sanitizeInput(password);
     
-    if (!validateEmail(sanitizedEmail)) {
+    if (!validateEmail(cleanEmail)) {
       toast.error('Invalid email format');
-      recordLoginAttempt(sanitizedEmail, false);
+      recordLoginAttempt(cleanEmail, false);
       return false;
     }
     
     // Check rate limiting
-    if (isRateLimited(sanitizedEmail)) {
+    if (isRateLimited(cleanEmail)) {
       toast.error('Too many failed attempts. Please try again in 15 minutes.');
       return false;
     }
@@ -162,32 +137,32 @@ export const login = async (email: string, password: string): Promise<boolean> =
     // Authenticate with Supabase directly
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: sanitizedEmail,
-        password: sanitizedPassword
+        email: cleanEmail,
+        password: cleanPassword
       });
       
       if (error) {
         console.error('Authentication failed:', error);
         toast.error('Invalid credentials');
-        recordLoginAttempt(sanitizedEmail, false);
+        recordLoginAttempt(cleanEmail, false);
         return false;
       }
       
       if (!data.user) {
         toast.error('Authentication failed');
-        recordLoginAttempt(sanitizedEmail, false);
+        recordLoginAttempt(cleanEmail, false);
         return false;
       }
       
       // Create secure session
-      createSecureSession(sanitizedEmail);
-      recordLoginAttempt(sanitizedEmail, true);
+      createSecureSession(cleanEmail);
+      recordLoginAttempt(cleanEmail, true);
       toast.success('Welcome back, Admin!');
       return true;
       
     } catch (error) {
       console.error('Supabase authentication error:', error);
-      recordLoginAttempt(sanitizedEmail, false);
+      recordLoginAttempt(cleanEmail, false);
       toast.error('Authentication service unavailable. Please try again.');
       return false;
     }
@@ -315,28 +290,28 @@ export const getCurrentUser = async () => {
   }
 };
 
-// Enhanced email update with better validation and error handling
+// Fixed email update with minimal processing
 export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
   try {
-    // Enhanced sanitization for Supabase compatibility
-    const sanitizedEmail = sanitizeEmailForSupabase(newEmail);
+    // Simple sanitization - just trim and lowercase
+    const cleanEmail = newEmail.trim().toLowerCase();
     
-    // Validate the sanitized email
-    if (!validateEmail(sanitizedEmail)) {
+    // Validate the email
+    if (!validateEmail(cleanEmail)) {
       toast.error('Invalid email format. Please check your email address.');
       return false;
     }
     
-    // Additional check for common email issues
-    if (sanitizedEmail.length < 5 || sanitizedEmail.length > 254) {
+    // Additional basic checks
+    if (cleanEmail.length < 5 || cleanEmail.length > 254) {
       toast.error('Email address length is invalid.');
       return false;
     }
     
-    console.log('Attempting to update email to:', sanitizedEmail);
+    console.log('Attempting to update email to:', cleanEmail);
     
     const { error } = await supabase.auth.updateUser({
-      email: sanitizedEmail
+      email: cleanEmail
     });
     
     if (error) {
@@ -358,7 +333,7 @@ export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
     // Update session data
     const sessionData = getSessionData();
     if (sessionData) {
-      sessionData.email = sanitizedEmail;
+      sessionData.email = cleanEmail;
       localStorage.setItem('sessionData', JSON.stringify(sessionData));
     }
     
@@ -406,8 +381,8 @@ export const updateUserPassword = async (newPassword: string): Promise<boolean> 
   }
 };
 
-// Backup and restore functions
-export const exportDatabaseBackup = async (): Promise<string | null> => {
+// Enhanced backup export to Excel with progress indicators
+export const exportDatabaseBackup = async (onProgress?: (progress: number, status: string) => void): Promise<string | null> => {
   try {
     const tables = [
       'event_requests',
@@ -418,91 +393,208 @@ export const exportDatabaseBackup = async (): Promise<string | null> => {
       'event_categories',
       'event_templates',
       'vendors',
-      'site_settings'
+      'site_settings',
+      'invoices',
+      'invoice_items',
+      'event_timeline',
+      'event_attachments',
+      'user_preferences',
+      'admin_users'
     ];
+    
+    onProgress?.(0, 'Initializing backup...');
     
     const backup: any = {
       timestamp: new Date().toISOString(),
-      version: '1.0',
+      version: '2.0',
       data: {}
     };
     
+    // Create Excel workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Add metadata sheet
+    const metadataSheet = XLSX.utils.json_to_sheet([{
+      'Backup Date': new Date().toLocaleDateString(),
+      'Backup Time': new Date().toLocaleTimeString(),
+      'Version': '2.0',
+      'Total Tables': tables.length,
+      'Generated By': 'Mavryck Events Admin System'
+    }]);
+    XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Backup Info');
+    
+    let processedTables = 0;
+    
     for (const table of tables) {
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .is('deleted_at', null);
-      
-      if (error) {
-        console.error(`Error backing up ${table}:`, error);
-        continue;
+      try {
+        onProgress?.(
+          Math.round((processedTables / tables.length) * 80), 
+          `Backing up ${table}...`
+        );
+        
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .is('deleted_at', null);
+        
+        if (error) {
+          console.error(`Error backing up ${table}:`, error);
+          continue;
+        }
+        
+        backup.data[table] = data;
+        
+        // Add table data to Excel workbook
+        if (data && data.length > 0) {
+          // Clean data for Excel export
+          const cleanData = data.map(row => {
+            const cleanRow: any = {};
+            Object.keys(row).forEach(key => {
+              let value = row[key];
+              // Handle JSON fields
+              if (typeof value === 'object' && value !== null) {
+                value = JSON.stringify(value);
+              }
+              // Handle dates
+              if (value instanceof Date) {
+                value = value.toISOString();
+              }
+              cleanRow[key] = value;
+            });
+            return cleanRow;
+          });
+          
+          const worksheet = XLSX.utils.json_to_sheet(cleanData);
+          
+          // Auto-size columns
+          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+          const colWidths: any[] = [];
+          for (let C = range.s.c; C <= range.e.c; ++C) {
+            let maxWidth = 10;
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+              const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+              const cell = worksheet[cellAddress];
+              if (cell && cell.v) {
+                const cellLength = cell.v.toString().length;
+                maxWidth = Math.max(maxWidth, Math.min(cellLength, 50));
+              }
+            }
+            colWidths[C] = { wch: maxWidth };
+          }
+          worksheet['!cols'] = colWidths;
+          
+          XLSX.utils.book_append_sheet(workbook, worksheet, table.replace('_', ' ').substring(0, 31));
+        } else {
+          // Add empty sheet for tables with no data
+          const emptySheet = XLSX.utils.json_to_sheet([{ 'No Data': 'This table contains no records' }]);
+          XLSX.utils.book_append_sheet(workbook, emptySheet, table.replace('_', ' ').substring(0, 31));
+        }
+        
+        processedTables++;
+      } catch (error) {
+        console.error(`Error processing ${table}:`, error);
+        processedTables++;
       }
-      
-      backup.data[table] = data;
     }
     
+    onProgress?.(90, 'Generating Excel file...');
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `mavryck-events-backup-${timestamp}.xlsx`;
+    
+    // Write Excel file
+    XLSX.writeFile(workbook, filename);
+    
+    onProgress?.(100, 'Backup completed successfully!');
+    
+    // Also create JSON backup for import functionality
     const backupJson = JSON.stringify(backup, null, 2);
-    const blob = new Blob([backupJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
     
-    // Create download link
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mavryck-events-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Database backup exported successfully');
+    toast.success('Database backup exported successfully as Excel file');
     return backupJson;
   } catch (error) {
     console.error('Backup export error:', error);
     toast.error('Failed to export backup');
+    onProgress?.(0, 'Backup failed');
     return null;
   }
 };
 
-export const importDatabaseBackup = async (backupData: string): Promise<boolean> => {
+// Enhanced import with progress indicators
+export const importDatabaseBackup = async (
+  backupData: string, 
+  onProgress?: (progress: number, status: string) => void
+): Promise<boolean> => {
   try {
+    onProgress?.(0, 'Validating backup file...');
+    
     const backup = JSON.parse(backupData);
     
     if (!backup.data || !backup.timestamp) {
       toast.error('Invalid backup file format');
+      onProgress?.(0, 'Invalid backup file');
       return false;
     }
     
+    const tables = Object.keys(backup.data);
+    let processedTables = 0;
     let successCount = 0;
     let errorCount = 0;
+    
+    onProgress?.(10, 'Starting data restoration...');
     
     for (const [tableName, tableData] of Object.entries(backup.data)) {
       if (!Array.isArray(tableData)) continue;
       
       try {
+        onProgress?.(
+          10 + Math.round((processedTables / tables.length) * 80), 
+          `Restoring ${tableName}...`
+        );
+        
         // Clear existing data (soft delete)
         await supabase
           .from(tableName)
           .update({ deleted_at: new Date().toISOString() })
           .is('deleted_at', null);
         
-        // Insert backup data
+        // Insert backup data in batches
         if ((tableData as any[]).length > 0) {
-          const { error } = await supabase
-            .from(tableName)
-            .insert(tableData as any[]);
+          const batchSize = 100;
+          const batches = [];
           
-          if (error) {
-            console.error(`Error restoring ${tableName}:`, error);
-            errorCount++;
-          } else {
+          for (let i = 0; i < (tableData as any[]).length; i += batchSize) {
+            batches.push((tableData as any[]).slice(i, i + batchSize));
+          }
+          
+          for (const batch of batches) {
+            const { error } = await supabase
+              .from(tableName)
+              .insert(batch);
+            
+            if (error) {
+              console.error(`Error restoring ${tableName}:`, error);
+              errorCount++;
+              break;
+            }
+          }
+          
+          if (errorCount === 0) {
             successCount++;
           }
+        } else {
+          successCount++;
         }
       } catch (error) {
         console.error(`Error processing ${tableName}:`, error);
         errorCount++;
       }
+      
+      processedTables++;
     }
+    
+    onProgress?.(100, 'Restoration completed!');
     
     if (successCount > 0) {
       toast.success(`Database restored successfully. ${successCount} tables restored.`);
@@ -517,11 +609,12 @@ export const importDatabaseBackup = async (backupData: string): Promise<boolean>
   } catch (error) {
     console.error('Backup import error:', error);
     toast.error('Failed to import backup. Please check the file format.');
+    onProgress?.(0, 'Import failed');
     return false;
   }
 };
 
-// Site settings functions - removed URL validation
+// Site settings functions
 export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
   try {
     if (!url.trim()) {
