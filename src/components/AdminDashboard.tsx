@@ -44,7 +44,7 @@ import { MessageDetailsModal } from './MessageDetailsModal';
 import { AddItemModal } from './AddItemModal';
 import { EditItemModal } from './EditItemModal';
 import { ExportModal } from './ExportModal';
-import { AdminSettings } from './AdminSettings';
+import AdminSettings from './AdminSettings';
 import toast from 'react-hot-toast';
 import type { EventRequest, ContactMessage, GalleryItem, Product, Testimonial } from '../types/supabase';
 
