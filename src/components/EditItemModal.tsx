@@ -13,7 +13,7 @@ interface EditItemModalProps {
 }
 
 export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditItemModalProps) {
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
     if (item && isOpen) {
@@ -43,7 +43,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ 
+    setFormData((prev: any) => ({ 
       ...prev, 
       [id]: id === 'rating' ? parseInt(value) : value 
     }));
@@ -84,7 +84,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <input
                   type="text"
                   id="title"
-                  value={formData.title || ''}
+                  value={formData?.title || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -94,7 +94,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
                 <select
                   id="category"
-                  value={formData.category || 'Corporate'}
+                  value={formData?.category || 'Corporate'}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -117,7 +117,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <input
                   type="text"
                   id="name"
-                  value={formData.name || ''}
+                  value={formData?.name || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -128,7 +128,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <input
                   type="text"
                   id="price"
-                  value={formData.price || ''}
+                  value={formData?.price || ''}
                   onChange={handleChange}
                   placeholder="e.g., ₹50,000"
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -145,7 +145,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <input
                   type="text"
                   id="name"
-                  value={formData.name || ''}
+                  value={formData?.name || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -156,7 +156,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <input
                   type="text"
                   id="role"
-                  value={formData.role || ''}
+                  value={formData?.role || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -166,7 +166,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
                 <label className="block text-sm font-medium text-gray-300 mb-2">Rating (1-5)</label>
                 <select
                   id="rating"
-                  value={formData.rating || '5'}
+                  value={formData?.rating || '5'}
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
@@ -188,7 +188,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
             <input
               type="url"
               id={type === 'testimonial' ? 'avatar_url' : 'image_url'}
-              value={formData[type === 'testimonial' ? 'avatar_url' : 'image_url'] || ''}
+              value={formData?.[type === 'testimonial' ? 'avatar_url' : 'image_url'] || ''}
               onChange={handleChange}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
               required
@@ -201,7 +201,7 @@ export function EditItemModal({ type, item, isOpen, onClose, onSuccess }: EditIt
             </label>
             <textarea
               id={type === 'testimonial' ? 'content' : 'description'}
-              value={formData[type === 'testimonial' ? 'content' : 'description'] || ''}
+              value={formData?.[type === 'testimonial' ? 'content' : 'description'] || ''}
               onChange={handleChange}
               rows={4}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"

@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Calendar, 
   MessageSquare, 
   Image, 
   Package, 
   Star, 
-  Users, 
   TrendingUp, 
   Eye,
-  EyeOff,
   Edit,
   Trash2,
   Plus,
@@ -19,7 +17,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Filter,
   Search,
   RefreshCw
 } from 'lucide-react';

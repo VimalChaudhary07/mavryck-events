@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, Calendar, Mail, Phone, Users, FileText, Clock } from 'lucide-react';
+import { X, Calendar, Users, FileText, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { EventRequest } from '../types/supabase';
 

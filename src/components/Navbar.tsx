@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, X, Calendar } from 'lucide-react';
 import { Link } from './Link';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -49,15 +49,6 @@ export function Navbar() {
       }
     }
     setIsOpen(false); // Close mobile menu
-  };
-
-  const handleNavClick = (href: string) => {
-    if (href.startsWith('#')) {
-      const sectionId = href.substring(1);
-      scrollToSection(sectionId);
-    } else {
-      setIsOpen(false);
-    }
   };
 
   const handleHomeClick = () => {

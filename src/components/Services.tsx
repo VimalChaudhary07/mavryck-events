@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Calendar, Gift, Heart, Building2, Music, Star, Award, PartyPopper, MapPin, Paintbrush, HeartHandshake, Home, Users } from 'lucide-react';
+import { useMemo } from 'react';
+import { Calendar, Gift, Heart, Building2, Music, Star, PartyPopper, MapPin, Paintbrush, HeartHandshake, Home, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const services = [

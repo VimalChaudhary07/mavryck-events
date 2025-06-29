@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Mail, Phone, Instagram, Facebook, Twitter, Linkedin } from 'lucide-react';
 

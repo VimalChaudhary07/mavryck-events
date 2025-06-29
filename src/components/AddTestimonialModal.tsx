@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface AddTestimonialModalProps {

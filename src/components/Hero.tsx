@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowRight, Calendar, Users, MapPin, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import EventPlanningModal from './EventPlanningModal';
