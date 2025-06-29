@@ -30,7 +30,6 @@
     "noImplicitThis": false,
     "useUnknownInCatchVariables": false,
     "alwaysStrict": false,
-    "noUnusedLocals": false,
     "noImplicitOverride": false
   },
   "include": ["src/**/*", "vite.config.ts"],
