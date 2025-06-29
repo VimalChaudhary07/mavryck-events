@@ -14,7 +14,7 @@ const PROTECTED_ROUTES = ['/admin/dashboard'];
 // Routes that should redirect authenticated users
 const AUTH_ROUTES = ['/admin'];
 
-export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
+export function SecurityMiddleware({ children }: SecurityMiddlewareProps): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -107,10 +107,6 @@ export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
 
     // Add CSRF tokens after a short delay to ensure forms are rendered
     setTimeout(addCSRFTokenToForms, 100);
-
-    // REMOVED: Prevent clickjacking code that was causing SecurityError
-    // The frame-busting code has been removed as it causes navigation errors
-    // We rely on X-Frame-Options and CSP headers instead
 
     // Production security measures
     if (import.meta.env.PROD) {

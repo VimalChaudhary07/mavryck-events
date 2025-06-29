@@ -131,36 +131,56 @@ The application will be available at `http://localhost:5173`
 
 ## 🚀 Deployment
 
-### Vercel Deployment
+This project is optimized for deployment on multiple platforms:
 
-This project is optimized for deployment on Vercel:
-
+### Vercel (Recommended)
 1. **Connect to Vercel:**
    - Push your code to GitHub
    - Connect your repository to Vercel
-   - Vercel will automatically detect the Vite configuration
+   - Vercel will automatically detect the configuration
 
 2. **Environment Variables:**
-   Set the following environment variables in your Vercel dashboard:
    ```
    VITE_SUPABASE_URL=your_supabase_project_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
 
-3. **Build Settings:**
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-   - Install Command: `npm install`
+3. **Deploy:** Automatic deployment on push
 
-4. **Deploy:**
-   Vercel will automatically build and deploy your application.
+### Netlify
+1. **Build Settings:**
+   - Build Command: `npm run build`
+   - Publish Directory: `dist`
+
+2. **Environment Variables:** Same as Vercel
+
+3. **Deploy:** Uses `netlify.toml` configuration
+
+### Firebase Hosting
+1. **Install Firebase CLI:**
+   ```bash
+   npm install -g firebase-tools
+   ```
+
+2. **Initialize and Deploy:**
+   ```bash
+   firebase login
+   firebase init hosting
+   npm run build
+   firebase deploy
+   ```
+
+### AWS Amplify
+1. **Connect Repository:** Link your GitHub repository
+2. **Build Settings:** Amplify auto-detects Vite configuration
+3. **Environment Variables:** Add in Amplify console
 
 ### Other Platforms
-
-The application can also be deployed to:
-- **Netlify:** Use the same build settings
-- **AWS Amplify:** Configure with the Vite build settings
-- **Firebase Hosting:** Build and deploy the `dist` folder
+The application can be deployed to any static hosting service:
+- **GitHub Pages**
+- **Surge.sh**
+- **Railway**
+- **Render**
 
 ---
 
@@ -358,7 +378,7 @@ For support and inquiries:
 - ✅ Performance optimization and indexing
 - ✅ Production-ready security measures
 - ✅ Enhanced error handling and validation
-- ✅ Vercel deployment optimization
+- ✅ Universal deployment optimization
 
 ---
 

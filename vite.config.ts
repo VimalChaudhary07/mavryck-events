@@ -27,16 +27,14 @@ export default defineConfig({
         }
       }
     },
-    // Enable source maps for production debugging
+    // Disable source maps for production to reduce bundle size
     sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
     // Target modern browsers for better optimization
     target: 'esnext',
     // Ensure proper asset handling
-    assetsDir: 'assets',
-    // Generate manifest for better caching
-    manifest: true
+    assetsDir: 'assets'
   },
   optimizeDeps: {
     // Pre-bundle dependencies for faster dev server startup
@@ -47,8 +45,7 @@ export default defineConfig({
       'lucide-react',
       'react-hot-toast',
       'react-router-dom',
-      '@supabase/supabase-js',
-      'web-vitals'
+      '@supabase/supabase-js'
     ]
   },
   // Enable CSS code splitting
@@ -59,7 +56,5 @@ export default defineConfig({
   define: {
     __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
     __PROD__: JSON.stringify(process.env.NODE_ENV === 'production')
-  },
-  // Ensure proper base path for deployment
-  base: './'
+  }
 });
