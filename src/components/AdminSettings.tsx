@@ -20,6 +20,8 @@ const AdminSettings: React.FC = () => {
   const [googlePhotosUrl, setGooglePhotosUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('account');
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [backupStatus, setBackupStatus] = useState('');
 
   useEffect(() => {
     loadUserData();
@@ -30,8 +32,9 @@ const AdminSettings: React.FC = () => {
     try {
       const user = await getCurrentUser();
       if (user?.email) {
-        setCurrentEmail(user.email);
-        setNewEmail(user.email);
+        const normalizedEmail = user.email.trim().toLowerCase();
+        setCurrentEmail(normalizedEmail);
+        setNewEmail(normalizedEmail);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -50,16 +53,25 @@ const AdminSettings: React.FC = () => {
   const handleEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newEmail || newEmail === currentEmail) {
+    // Normalize both emails for comparison
+    const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
+    const normalizedNewEmail = newEmail.trim().toLowerCase();
+    
+    if (!normalizedNewEmail) {
       toast.error('Please enter a new email address');
+      return;
+    }
+
+    if (normalizedNewEmail === normalizedCurrentEmail) {
+      toast.error('The new email address is the same as your current email');
       return;
     }
 
     setIsLoading(true);
     try {
-      const success = await updateUserEmail(newEmail);
+      const success = await updateUserEmail(normalizedNewEmail, normalizedCurrentEmail);
       if (success) {
-        setCurrentEmail(newEmail);
+        setCurrentEmail(normalizedNewEmail);
       }
     } catch (error) {
       console.error('Email change error:', error);
@@ -105,13 +117,24 @@ const AdminSettings: React.FC = () => {
 
   const handleExportBackup = async () => {
     setIsLoading(true);
+    setBackupProgress(0);
+    setBackupStatus('Starting backup...');
+    
     try {
-      await exportDatabaseBackup();
+      await exportDatabaseBackup((progress, status) => {
+        setBackupProgress(progress);
+        setBackupStatus(status);
+      });
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Failed to export backup');
+      setBackupStatus('Backup failed');
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        setBackupProgress(0);
+        setBackupStatus('');
+      }, 3000);
     }
   };
 
@@ -125,9 +148,16 @@ const AdminSettings: React.FC = () => {
     }
 
     setIsLoading(true);
+    setBackupProgress(0);
+    setBackupStatus('Reading backup file...');
+    
     try {
       const fileContent = await file.text();
-      const success = await importDatabaseBackup(fileContent);
+      const success = await importDatabaseBackup(fileContent, (progress, status) => {
+        setBackupProgress(progress);
+        setBackupStatus(status);
+      });
+      
       if (success) {
         // Reset file input
         event.target.value = '';
@@ -135,8 +165,13 @@ const AdminSettings: React.FC = () => {
     } catch (error) {
       console.error('Import error:', error);
       toast.error('Failed to import backup');
+      setBackupStatus('Import failed');
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        setBackupProgress(0);
+        setBackupStatus('');
+      }, 3000);
     }
   };
 
@@ -164,6 +199,11 @@ const AdminSettings: React.FC = () => {
     { id: 'backup', label: 'Backup & Restore', icon: Download },
     { id: 'gallery', label: 'Gallery Settings', icon: Camera }
   ];
+
+  // Check if new email is different from current
+  const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
+  const normalizedNewEmail = newEmail.trim().toLowerCase();
+  const isEmailChanged = normalizedNewEmail !== normalizedCurrentEmail && normalizedNewEmail.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -247,7 +287,7 @@ const AdminSettings: React.FC = () => {
                   </div>
                   <button
                     type="submit"
-                    disabled={isLoading || newEmail === currentEmail}
+                    disabled={isLoading || !isEmailChanged}
                     className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                   >
                     <Save className="w-4 h-4 mr-2" />
@@ -315,12 +355,28 @@ const AdminSettings: React.FC = () => {
                   Database Backup & Restore
                 </h3>
                 
+                {/* Progress Indicator */}
+                {(isLoading && (backupProgress > 0 || backupStatus)) && (
+                  <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-blue-700">{backupStatus}</span>
+                      <span className="text-sm text-blue-600">{backupProgress}%</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${backupProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid md:grid-cols-2 gap-6">
                   {/* Export Backup */}
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-900">Export Backup</h4>
                     <p className="text-sm text-gray-600">
-                      Download a complete backup of your database including all events, gallery items, products, and settings.
+                      Download a complete backup of your database including all events, gallery items, products, and settings as an Excel file.
                     </p>
                     <button
                       onClick={handleExportBackup}
@@ -336,7 +392,7 @@ const AdminSettings: React.FC = () => {
                   <div className="space-y-4">
                     <h4 className="font-medium text-gray-900">Import Backup</h4>
                     <p className="text-sm text-gray-600">
-                      Restore your database from a previously exported backup file. This will replace all current data.
+                      Restore your database from a previously exported JSON backup file. This will replace all current data.
                     </p>
                     <div className="relative">
                       <input
@@ -356,6 +412,7 @@ const AdminSettings: React.FC = () => {
                     <div className="text-sm text-yellow-700">
                       <p className="font-medium">Important:</p>
                       <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Export creates an Excel file for viewing and a JSON file for import</li>
                         <li>Always create a backup before importing new data</li>
                         <li>Import will replace all existing data</li>
                         <li>Only import backup files from trusted sources</li>

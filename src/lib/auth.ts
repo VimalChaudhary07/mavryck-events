@@ -290,8 +290,8 @@ export const getCurrentUser = async () => {
   }
 };
 
-// Fixed email update with minimal processing
-export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
+// Fixed email update with proper validation and current email check
+export const updateUserEmail = async (newEmail: string, currentEmail?: string): Promise<boolean> => {
   try {
     // Simple sanitization - just trim and lowercase
     const cleanEmail = newEmail.trim().toLowerCase();
@@ -308,7 +308,23 @@ export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
       return false;
     }
     
-    console.log('Attempting to update email to:', cleanEmail);
+    // Get current user to compare emails
+    const currentUser = await getCurrentUser();
+    const actualCurrentEmail = currentUser?.email?.trim().toLowerCase();
+    
+    // Check if the new email is the same as current email
+    if (cleanEmail === actualCurrentEmail) {
+      toast.error('The new email address is the same as your current email address.');
+      return false;
+    }
+    
+    // Also check against provided currentEmail parameter
+    if (currentEmail && cleanEmail === currentEmail.trim().toLowerCase()) {
+      toast.error('The new email address is the same as your current email address.');
+      return false;
+    }
+    
+    console.log('Attempting to update email from:', actualCurrentEmail, 'to:', cleanEmail);
     
     const { error } = await supabase.auth.updateUser({
       email: cleanEmail
@@ -324,6 +340,8 @@ export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
         toast.error('Please confirm your current email before changing it.');
       } else if (error.message.includes('email_change_token_already_sent')) {
         toast.error('Email change request already sent. Please check your inbox.');
+      } else if (error.message.includes('same_email')) {
+        toast.error('The new email address is the same as your current email.');
       } else {
         toast.error(`Failed to update email: ${error.message}`);
       }
@@ -432,17 +450,29 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
           `Backing up ${table}...`
         );
         
-        const { data, error } = await supabase
-          .from(table)
-          .select('*')
-          .is('deleted_at', null);
+        // Use different query for tables that might not have deleted_at column
+        let query = supabase.from(table).select('*');
+        
+        // Only add deleted_at filter for tables that have this column
+        const tablesWithDeletedAt = [
+          'event_requests', 'gallery', 'products', 'testimonials', 
+          'contact_messages', 'site_settings'
+        ];
+        
+        if (tablesWithDeletedAt.includes(table)) {
+          query = query.is('deleted_at', null);
+        }
+        
+        const { data, error } = await query;
         
         if (error) {
           console.error(`Error backing up ${table}:`, error);
+          // Continue with other tables even if one fails
+          processedTables++;
           continue;
         }
         
-        backup.data[table] = data;
+        backup.data[table] = data || [];
         
         // Add table data to Excel workbook
         if (data && data.length > 0) {
@@ -483,11 +513,14 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
           }
           worksheet['!cols'] = colWidths;
           
-          XLSX.utils.book_append_sheet(workbook, worksheet, table.replace('_', ' ').substring(0, 31));
+          // Truncate table name for Excel sheet name (max 31 chars)
+          const sheetName = table.replace(/_/g, ' ').substring(0, 31);
+          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         } else {
           // Add empty sheet for tables with no data
           const emptySheet = XLSX.utils.json_to_sheet([{ 'No Data': 'This table contains no records' }]);
-          XLSX.utils.book_append_sheet(workbook, emptySheet, table.replace('_', ' ').substring(0, 31));
+          const sheetName = table.replace(/_/g, ' ').substring(0, 31);
+          XLSX.utils.book_append_sheet(workbook, emptySheet, sheetName);
         }
         
         processedTables++;
@@ -497,21 +530,31 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
       }
     }
     
-    onProgress?.(90, 'Generating Excel file...');
+    onProgress?.(90, 'Generating files...');
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `mavryck-events-backup-${timestamp}.xlsx`;
+    const excelFilename = `mavryck-events-backup-${timestamp}.xlsx`;
+    const jsonFilename = `mavryck-events-backup-${timestamp}.json`;
     
     // Write Excel file
-    XLSX.writeFile(workbook, filename);
-    
-    onProgress?.(100, 'Backup completed successfully!');
+    XLSX.writeFile(workbook, excelFilename);
     
     // Also create JSON backup for import functionality
     const backupJson = JSON.stringify(backup, null, 2);
+    const jsonBlob = new Blob([backupJson], { type: 'application/json' });
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+    const jsonLink = document.createElement('a');
+    jsonLink.href = jsonUrl;
+    jsonLink.download = jsonFilename;
+    document.body.appendChild(jsonLink);
+    jsonLink.click();
+    document.body.removeChild(jsonLink);
+    URL.revokeObjectURL(jsonUrl);
     
-    toast.success('Database backup exported successfully as Excel file');
+    onProgress?.(100, 'Backup completed successfully!');
+    
+    toast.success('Database backup exported successfully as Excel and JSON files');
     return backupJson;
   } catch (error) {
     console.error('Backup export error:', error);
@@ -521,7 +564,7 @@ export const exportDatabaseBackup = async (onProgress?: (progress: number, statu
   }
 };
 
-// Enhanced import with progress indicators
+// Enhanced import with progress indicators and better error handling
 export const importDatabaseBackup = async (
   backupData: string, 
   onProgress?: (progress: number, status: string) => void
@@ -529,11 +572,18 @@ export const importDatabaseBackup = async (
   try {
     onProgress?.(0, 'Validating backup file...');
     
-    const backup = JSON.parse(backupData);
+    let backup;
+    try {
+      backup = JSON.parse(backupData);
+    } catch (parseError) {
+      toast.error('Invalid JSON format in backup file');
+      onProgress?.(0, 'Invalid backup file format');
+      return false;
+    }
     
     if (!backup.data || !backup.timestamp) {
-      toast.error('Invalid backup file format');
-      onProgress?.(0, 'Invalid backup file');
+      toast.error('Invalid backup file format - missing required fields');
+      onProgress?.(0, 'Invalid backup file structure');
       return false;
     }
     
@@ -545,7 +595,11 @@ export const importDatabaseBackup = async (
     onProgress?.(10, 'Starting data restoration...');
     
     for (const [tableName, tableData] of Object.entries(backup.data)) {
-      if (!Array.isArray(tableData)) continue;
+      if (!Array.isArray(tableData)) {
+        console.warn(`Skipping ${tableName} - not an array`);
+        processedTables++;
+        continue;
+      }
       
       try {
         onProgress?.(
@@ -553,38 +607,69 @@ export const importDatabaseBackup = async (
           `Restoring ${tableName}...`
         );
         
-        // Clear existing data (soft delete)
-        await supabase
-          .from(tableName)
-          .update({ deleted_at: new Date().toISOString() })
-          .is('deleted_at', null);
+        // Check if table has deleted_at column for soft delete
+        const tablesWithDeletedAt = [
+          'event_requests', 'gallery', 'products', 'testimonials', 
+          'contact_messages', 'site_settings'
+        ];
+        
+        // Clear existing data (soft delete for supported tables, hard delete for others)
+        if (tablesWithDeletedAt.includes(tableName)) {
+          await supabase
+            .from(tableName)
+            .update({ deleted_at: new Date().toISOString() })
+            .is('deleted_at', null);
+        } else {
+          // For tables without soft delete, we'll skip clearing to avoid data loss
+          console.log(`Skipping clear for ${tableName} - no soft delete support`);
+        }
         
         // Insert backup data in batches
         if ((tableData as any[]).length > 0) {
-          const batchSize = 100;
+          const batchSize = 50; // Reduced batch size for better reliability
           const batches = [];
           
           for (let i = 0; i < (tableData as any[]).length; i += batchSize) {
             batches.push((tableData as any[]).slice(i, i + batchSize));
           }
           
+          let batchErrors = 0;
           for (const batch of batches) {
-            const { error } = await supabase
-              .from(tableName)
-              .insert(batch);
-            
-            if (error) {
-              console.error(`Error restoring ${tableName}:`, error);
-              errorCount++;
-              break;
+            try {
+              // Clean the data before inserting
+              const cleanBatch = batch.map(item => {
+                const cleanItem = { ...item };
+                // Remove any undefined values
+                Object.keys(cleanItem).forEach(key => {
+                  if (cleanItem[key] === undefined) {
+                    delete cleanItem[key];
+                  }
+                });
+                return cleanItem;
+              });
+              
+              const { error } = await supabase
+                .from(tableName)
+                .insert(cleanBatch);
+              
+              if (error) {
+                console.error(`Error restoring batch in ${tableName}:`, error);
+                batchErrors++;
+              }
+            } catch (batchError) {
+              console.error(`Batch error in ${tableName}:`, batchError);
+              batchErrors++;
             }
           }
           
-          if (errorCount === 0) {
+          if (batchErrors === 0) {
             successCount++;
+          } else {
+            errorCount++;
+            console.warn(`${tableName} had ${batchErrors} batch errors out of ${batches.length} batches`);
           }
         } else {
-          successCount++;
+          successCount++; // Empty table is considered successful
         }
       } catch (error) {
         console.error(`Error processing ${tableName}:`, error);
@@ -599,11 +684,11 @@ export const importDatabaseBackup = async (
     if (successCount > 0) {
       toast.success(`Database restored successfully. ${successCount} tables restored.`);
       if (errorCount > 0) {
-        toast.error(`${errorCount} tables had errors during restore.`);
+        toast.error(`${errorCount} tables had errors during restore. Check console for details.`);
       }
       return true;
     } else {
-      toast.error('Failed to restore database');
+      toast.error('Failed to restore database - no tables were successfully restored');
       return false;
     }
   } catch (error) {

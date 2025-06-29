@@ -108,10 +108,9 @@ export function SecurityMiddleware({ children }: SecurityMiddlewareProps) {
     // Add CSRF tokens after a short delay to ensure forms are rendered
     setTimeout(addCSRFTokenToForms, 100);
 
-    // Prevent clickjacking
-    if (window.top !== window.self) {
-      window.top.location = window.self.location;
-    }
+    // REMOVED: Prevent clickjacking code that was causing SecurityError
+    // The frame-busting code has been removed as it causes navigation errors
+    // We rely on X-Frame-Options and CSP headers instead
 
     // Production security measures
     if (import.meta.env.PROD) {
