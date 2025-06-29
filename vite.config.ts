@@ -27,12 +27,16 @@ export default defineConfig({
         }
       }
     },
-    // Disable source maps for production to reduce bundle size
+    // Enable source maps for production debugging
     sourcemap: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
     // Target modern browsers for better optimization
-    target: 'esnext'
+    target: 'esnext',
+    // Ensure proper asset handling
+    assetsDir: 'assets',
+    // Generate manifest for better caching
+    manifest: true
   },
   optimizeDeps: {
     // Pre-bundle dependencies for faster dev server startup
@@ -49,11 +53,13 @@ export default defineConfig({
   },
   // Enable CSS code splitting
   css: {
-    devSourcemap: true
+    devSourcemap: false
   },
   // Define environment variables for build optimization
   define: {
     __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
     __PROD__: JSON.stringify(process.env.NODE_ENV === 'production')
-  }
+  },
+  // Ensure proper base path for deployment
+  base: './'
 });
