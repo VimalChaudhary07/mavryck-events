@@ -521,12 +521,11 @@ export const importDatabaseBackup = async (backupData: string): Promise<boolean>
   }
 };
 
-// Site settings functions
+// Site settings functions - removed URL validation
 export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
   try {
-    // Validate URL format
-    if (!url.includes('photos.google.com')) {
-      toast.error('Please enter a valid Google Photos URL');
+    if (!url.trim()) {
+      toast.error('Please enter a URL');
       return false;
     }
     
@@ -540,7 +539,7 @@ export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
     if (existingSettings) {
       const { error } = await supabase
         .from('site_settings')
-        .update({ google_photos_url: url })
+        .update({ google_photos_url: url.trim() })
         .eq('id', existingSettings.id);
       
       if (error) {
@@ -551,7 +550,7 @@ export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
     } else {
       const { error } = await supabase
         .from('site_settings')
-        .insert({ google_photos_url: url });
+        .insert({ google_photos_url: url.trim() });
       
       if (error) {
         console.error('Error creating site settings:', error);
@@ -560,11 +559,11 @@ export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
       }
     }
     
-    toast.success('Google Photos URL updated successfully');
+    toast.success('Gallery URL updated successfully');
     return true;
   } catch (error) {
     console.error('Google Photos URL update error:', error);
-    toast.error('Failed to update Google Photos URL');
+    toast.error('Failed to update Gallery URL');
     return false;
   }
 };

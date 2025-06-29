@@ -140,11 +140,11 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  const handleGooglePhotosUrlUpdate = async (e: React.FormEvent) => {
+  const handleGalleryUrlUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!googlePhotosUrl) {
-      toast.error('Please enter a Google Photos URL');
+    if (!googlePhotosUrl.trim()) {
+      toast.error('Please enter a URL');
       return;
     }
 
@@ -152,8 +152,8 @@ const AdminSettings: React.FC = () => {
     try {
       await updateGooglePhotosUrl(googlePhotosUrl);
     } catch (error) {
-      console.error('Google Photos URL update error:', error);
-      toast.error('Failed to update Google Photos URL');
+      console.error('Gallery URL update error:', error);
+      toast.error('Failed to update Gallery URL');
     } finally {
       setIsLoading(false);
     }
@@ -375,21 +375,21 @@ const AdminSettings: React.FC = () => {
                   Gallery Settings
                 </h3>
                 
-                <form onSubmit={handleGooglePhotosUrlUpdate} className="space-y-4">
+                <form onSubmit={handleGalleryUrlUpdate} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Google Photos Album URL
+                      Gallery Album URL
                     </label>
                     <input
                       type="url"
                       value={googlePhotosUrl}
                       onChange={(e) => setGooglePhotosUrl(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-                      placeholder="https://photos.google.com/share/your-album-link"
+                      placeholder="Enter your gallery album URL"
                       required
                     />
                     <p className="mt-2 text-sm text-gray-600">
-                      This URL will be used for the "View More Photos" button in the gallery section.
+                      This URL will be used for the "View More Photos" button in the gallery section. You can use any photo sharing service URL.
                     </p>
                   </div>
                   
@@ -397,13 +397,14 @@ const AdminSettings: React.FC = () => {
                     <div className="flex">
                       <AlertCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5" />
                       <div className="text-sm text-blue-700">
-                        <p className="font-medium">How to get your Google Photos album URL:</p>
-                        <ol className="mt-1 list-decimal list-inside space-y-1">
-                          <li>Open Google Photos and create or select an album</li>
-                          <li>Click the share button and create a shareable link</li>
-                          <li>Copy the generated URL and paste it here</li>
-                          <li>Make sure the album is set to "Anyone with the link can view"</li>
-                        </ol>
+                        <p className="font-medium">Supported platforms:</p>
+                        <ul className="mt-1 list-disc list-inside space-y-1">
+                          <li>Google Photos shared albums</li>
+                          <li>Flickr photo sets</li>
+                          <li>Instagram profiles or hashtags</li>
+                          <li>Facebook photo albums</li>
+                          <li>Any other photo sharing service</li>
+                        </ul>
                       </div>
                     </div>
                   </div>
