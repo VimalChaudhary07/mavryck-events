@@ -753,7 +753,7 @@ export const importDatabaseBackup = async (
   }
 };
 
-// Site settings functions
+// Site settings functions - FIXED DATABASE CONNECTION
 export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
   try {
     if (!url.trim()) {
@@ -761,37 +761,49 @@ export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
       return false;
     }
     
-    // Get existing settings or create new one
-    const { data: existingSettings } = await supabase
+    console.log('Updating Google Photos URL:', url);
+    
+    // First, try to get existing settings
+    const { data: existingSettings, error: fetchError } = await supabase
       .from('site_settings')
       .select('*')
-      .limit(1)
-      .single();
+      .limit(1);
     
-    if (existingSettings) {
+    if (fetchError) {
+      console.error('Error fetching site settings:', fetchError);
+    }
+    
+    if (existingSettings && existingSettings.length > 0) {
+      // Update existing record
       const { error } = await supabase
         .from('site_settings')
-        .update({ google_photos_url: url.trim() })
-        .eq('id', existingSettings.id);
+        .update({ 
+          google_photos_url: url.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingSettings[0].id);
       
       if (error) {
         console.error('Error updating Google Photos URL:', error);
-        toast.error('Failed to update Google Photos URL');
+        toast.error('Failed to update Gallery URL');
         return false;
       }
     } else {
+      // Create new record
       const { error } = await supabase
         .from('site_settings')
-        .insert({ google_photos_url: url.trim() });
+        .insert({ 
+          google_photos_url: url.trim()
+        });
       
       if (error) {
         console.error('Error creating site settings:', error);
-        toast.error('Failed to save Google Photos URL');
+        toast.error('Failed to save Gallery URL');
         return false;
       }
     }
     
-    toast.success('Gallery URL updated successfully');
+    console.log('Gallery URL updated successfully');
     return true;
   } catch (error) {
     console.error('Google Photos URL update error:', error);
@@ -802,17 +814,26 @@ export const updateGooglePhotosUrl = async (url: string): Promise<boolean> => {
 
 export const getGooglePhotosUrl = async (): Promise<string> => {
   try {
+    console.log('Fetching Google Photos URL from database...');
+    
     const { data, error } = await supabase
       .from('site_settings')
       .select('google_photos_url')
-      .limit(1)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
     
-    if (error || !data) {
+    if (error) {
+      console.error('Error fetching Google Photos URL:', error);
       return 'https://photos.google.com/share/your-album-link';
     }
     
-    return data.google_photos_url || 'https://photos.google.com/share/your-album-link';
+    if (data && data.length > 0 && data[0].google_photos_url) {
+      console.log('Retrieved Google Photos URL:', data[0].google_photos_url);
+      return data[0].google_photos_url;
+    }
+    
+    console.log('No Google Photos URL found, using default');
+    return 'https://photos.google.com/share/your-album-link';
   } catch (error) {
     console.error('Error fetching Google Photos URL:', error);
     return 'https://photos.google.com/share/your-album-link';

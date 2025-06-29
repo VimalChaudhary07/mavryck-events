@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Star, ArrowRight, ArrowLeft, ExternalLink, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getGalleryItems, getProducts } from '../lib/database';
+import { getGooglePhotosUrl } from '../lib/auth';
 import type { GalleryItem, Product } from '../types/supabase';
 
 const categories = ['All', 'Corporate', 'Wedding', 'Birthday', 'Festival', 'Gala', 'Anniversary'];
@@ -51,12 +52,17 @@ export function GalleryAndProducts() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [galleryData, productsData] = await Promise.all([
+        const [galleryData, productsData, photosUrl] = await Promise.all([
           getGalleryItems(),
-          getProducts()
+          getProducts(),
+          getGooglePhotosUrl()
         ]);
+        
         setGalleryImages(galleryData || []);
         setProducts(productsData || []);
+        setGooglePhotosUrl(photosUrl);
+        
+        console.log('Loaded Google Photos URL:', photosUrl);
       } catch (error) {
         console.error('Failed to load data:', error);
       } finally {
@@ -64,19 +70,6 @@ export function GalleryAndProducts() {
       }
     };
     loadData();
-
-    // Load Google Photos URL from settings
-    const savedSettings = localStorage.getItem('siteSettings');
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        if (settings.business?.contact?.googlePhotosUrl) {
-          setGooglePhotosUrl(settings.business.contact.googlePhotosUrl);
-        }
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-    }
   }, []);
 
   const handlePrevImage = useCallback(() => {
@@ -102,6 +95,7 @@ export function GalleryAndProducts() {
   }, []);
 
   const handleViewMoreClick = useCallback(() => {
+    console.log('Opening gallery URL:', googlePhotosUrl);
     window.open(googlePhotosUrl, '_blank', 'noopener,noreferrer');
   }, [googlePhotosUrl]);
 
@@ -301,7 +295,7 @@ export function GalleryAndProducts() {
                   <ExternalLink className="w-6 h-6" />
                 </motion.button>
                 <p className="text-gray-500 text-sm mt-3">
-                  Explore our complete photo collection on Google Photos
+                  Explore our complete photo collection
                 </p>
               </motion.div>
             </>
