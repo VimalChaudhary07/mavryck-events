@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
+import { Settings, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle, User, Mail, Key } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { 
@@ -38,11 +38,19 @@ interface SiteSettings {
   updated_at?: string;
 }
 
+interface AdminUser {
+  id: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export function AdminSettings() {
   const [activeSection, setActiveSection] = useState('gallery');
   const [isLoading, setIsLoading] = useState(false);
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
   const [settings, setSettings] = useState({
     gallery: {
       googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
@@ -50,15 +58,58 @@ export function AdminSettings() {
     security: {
       currentPassword: '',
       newPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      newEmail: ''
     }
   });
   const [dbConnectionStatus, setDbConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   useEffect(() => {
     loadSettings();
+    loadCurrentUser();
     checkDatabaseConnection();
   }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Failed to get current user:', error);
+        return;
+      }
+
+      if (user) {
+        // Try to get admin user details from admin_users table
+        const { data: adminUser, error: adminError } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (adminError && adminError.code !== 'PGRST116') {
+          console.error('Failed to get admin user details:', adminError);
+        }
+
+        setCurrentUser({
+          id: user.id,
+          email: user.email || '',
+          created_at: adminUser?.created_at || user.created_at || '',
+          updated_at: adminUser?.updated_at || user.updated_at || ''
+        });
+
+        // Pre-fill the new email field with current email
+        setSettings(prev => ({
+          ...prev,
+          security: {
+            ...prev.security,
+            newEmail: user.email || ''
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load current user:', error);
+    }
+  };
 
   const checkDatabaseConnection = async () => {
     try {
@@ -203,27 +254,180 @@ export function AdminSettings() {
   };
 
   const handlePasswordChange = async () => {
-    if (settings.security.newPassword !== settings.security.confirmPassword) {
-      toast.error('Passwords do not match');
+    const { currentPassword, newPassword, confirmPassword } = settings.security;
+
+    // Validation
+    if (!currentPassword.trim()) {
+      toast.error('Current password is required');
+      return;
+    }
+
+    if (!newPassword.trim()) {
+      toast.error('New password is required');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      toast.error('New password must be different from current password');
       return;
     }
 
     setIsLoading(true);
     try {
-      // In a real application, you would make an API call here
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // First, verify the current password by attempting to sign in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Sign in with current credentials to verify current password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+      });
+
+      if (signInError) {
+        toast.error('Current password is incorrect');
+        return;
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (updateError) {
+        console.error('Password update error:', updateError);
+        toast.error(`Failed to update password: ${updateError.message}`);
+        return;
+      }
+
+      // Update admin_users table if it exists
+      try {
+        await supabase
+          .from('admin_users')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            updated_at: new Date().toISOString()
+          });
+      } catch (adminUpdateError) {
+        console.warn('Failed to update admin_users table:', adminUpdateError);
+        // This is not critical, continue with success
+      }
+
       toast.success('Password updated successfully');
       setSettings(prev => ({
         ...prev,
         security: {
+          ...prev.security,
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
         }
       }));
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Failed to update password:', error);
-      toast.error('Failed to update password');
+      toast.error(`Failed to update password: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailChange = async () => {
+    const { newEmail, currentPassword } = settings.security;
+
+    // Validation
+    if (!newEmail.trim()) {
+      toast.error('New email is required');
+      return;
+    }
+
+    if (!currentPassword.trim()) {
+      toast.error('Current password is required to change email');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (currentUser?.email === newEmail) {
+      toast.error('New email must be different from current email');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Verify current password first
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+      });
+
+      if (signInError) {
+        toast.error('Current password is incorrect');
+        return;
+      }
+
+      // Update email
+      const { error: updateError } = await supabase.auth.updateUser({
+        email: newEmail
+      });
+
+      if (updateError) {
+        console.error('Email update error:', updateError);
+        toast.error(`Failed to update email: ${updateError.message}`);
+        return;
+      }
+
+      // Update admin_users table
+      try {
+        await supabase
+          .from('admin_users')
+          .upsert({
+            id: user.id,
+            email: newEmail,
+            updated_at: new Date().toISOString()
+          });
+      } catch (adminUpdateError) {
+        console.warn('Failed to update admin_users table:', adminUpdateError);
+      }
+
+      // Update local state
+      setCurrentUser(prev => prev ? { ...prev, email: newEmail } : null);
+      
+      toast.success('Email updated successfully. Please check your new email for confirmation.');
+      setSettings(prev => ({
+        ...prev,
+        security: {
+          ...prev.security,
+          currentPassword: '',
+          newEmail: newEmail
+        }
+      }));
+
+    } catch (error: any) {
+      console.error('Failed to update email:', error);
+      toast.error(`Failed to update email: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -886,80 +1090,214 @@ export function AdminSettings() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="space-y-8">
+          <div className="flex items-center gap-2 mb-6">
             <Lock className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg font-medium text-white">Change Password</h3>
+            <h3 className="text-lg font-medium text-white">Security Settings</h3>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
-            <input
-              type="password"
-              value={settings.security.currentPassword}
-              onChange={(e) =>
-                setSettings(prev => ({
-                  ...prev,
-                  security: {
-                    ...prev.security,
-                    currentPassword: e.target.value
+
+          {/* Current User Info */}
+          {currentUser && (
+            <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <User className="w-5 h-5 text-blue-400" />
+                <h4 className="text-md font-medium text-white">Current Admin Account</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-400">Email:</span>
+                  <span className="text-white ml-2">{currentUser.email}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Account ID:</span>
+                  <span className="text-white ml-2 font-mono text-xs">{currentUser.id}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Created:</span>
+                  <span className="text-white ml-2">{new Date(currentUser.created_at).toLocaleDateString()}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Last Updated:</span>
+                  <span className="text-white ml-2">{new Date(currentUser.updated_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Change Email Section */}
+          <div className="bg-gray-700/50 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Mail className="w-5 h-5 text-blue-400" />
+              <h4 className="text-md font-medium text-white">Change Email Address</h4>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">New Email Address</label>
+                <input
+                  type="email"
+                  value={settings.security.newEmail}
+                  onChange={(e) =>
+                    setSettings(prev => ({
+                      ...prev,
+                      security: {
+                        ...prev.security,
+                        newEmail: e.target.value
+                      }
+                    }))
                   }
-                }))
-              }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Enter new email address"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Current Password (Required)</label>
+                <input
+                  type="password"
+                  value={settings.security.currentPassword}
+                  onChange={(e) =>
+                    setSettings(prev => ({
+                      ...prev,
+                      security: {
+                        ...prev.security,
+                        currentPassword: e.target.value
+                      }
+                    }))
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Enter current password to confirm"
+                />
+              </div>
+              <button
+                onClick={handleEmailChange}
+                disabled={isLoading || !settings.security.newEmail || !settings.security.currentPassword}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Mail className="w-5 h-5" />
+                )}
+                Update Email
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
-            <input
-              type="password"
-              value={settings.security.newPassword}
-              onChange={(e) =>
-                setSettings(prev => ({
-                  ...prev,
-                  security: {
-                    ...prev.security,
-                    newPassword: e.target.value
+
+          {/* Change Password Section */}
+          <div className="bg-gray-700/50 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Key className="w-5 h-5 text-orange-400" />
+              <h4 className="text-md font-medium text-white">Change Password</h4>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
+                <input
+                  type="password"
+                  value={settings.security.currentPassword}
+                  onChange={(e) =>
+                    setSettings(prev => ({
+                      ...prev,
+                      security: {
+                        ...prev.security,
+                        currentPassword: e.target.value
+                      }
+                    }))
                   }
-                }))
-              }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Enter current password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                <input
+                  type="password"
+                  value={settings.security.newPassword}
+                  onChange={(e) =>
+                    setSettings(prev => ({
+                      ...prev,
+                      security: {
+                        ...prev.security,
+                        newPassword: e.target.value
+                      }
+                    }))
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Enter new password (min 8 characters)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={settings.security.confirmPassword}
+                  onChange={(e) =>
+                    setSettings(prev => ({
+                      ...prev,
+                      security: {
+                        ...prev.security,
+                        confirmPassword: e.target.value
+                      }
+                    }))
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Confirm new password"
+                />
+              </div>
+              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-3">
+                <p className="text-xs text-blue-300">
+                  <strong>Password Requirements:</strong>
+                  <br />• Minimum 8 characters
+                  <br />• Must be different from current password
+                  <br />• Both new password fields must match
+                </p>
+              </div>
+              <button
+                onClick={handlePasswordChange}
+                disabled={isLoading || !settings.security.currentPassword || !settings.security.newPassword || !settings.security.confirmPassword}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Lock className="w-5 h-5" />
+                )}
+                Update Password
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
-            <input
-              type="password"
-              value={settings.security.confirmPassword}
-              onChange={(e) =>
-                setSettings(prev => ({
-                  ...prev,
-                  security: {
-                    ...prev.security,
-                    confirmPassword: e.target.value
-                  }
-                }))
-              }
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
+
+          {/* Security Information */}
+          <div className="bg-gray-700/50 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertCircle className="w-5 h-5 text-yellow-400" />
+              <h4 className="text-md font-medium text-white">Security Information</h4>
+            </div>
+            <div className="space-y-3 text-sm text-gray-300">
+              <p>• All password changes are processed through Supabase Authentication</p>
+              <p>• Email changes require verification through the new email address</p>
+              <p>• Your current password is required for all security changes</p>
+              <p>• Changes are immediately synced across all sessions</p>
+              <p>• Account data is stored securely in the admin_users table</p>
+            </div>
           </div>
         </div>
       )}
 
       <div className="flex justify-end mt-8">
-        <button
-          onClick={activeSection === 'gallery' ? handleSaveSettings : handlePasswordChange}
-          disabled={isLoading || activeSection === 'backup'}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          {isLoading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              {activeSection === 'gallery' ? <Save className="w-5 h-5" /> : activeSection === 'security' ? <Lock className="w-5 h-5" /> : null}
-            </>
-          )}
-          {activeSection === 'gallery' ? 'Save to Database' : activeSection === 'security' ? 'Update Password' : ''}
-        </button>
+        {activeSection === 'gallery' && (
+          <button
+            onClick={handleSaveSettings}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            Save to Database
+          </button>
+        )}
       </div>
     </div>
   );
