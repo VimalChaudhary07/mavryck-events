@@ -1,10 +1,5 @@
 import { supabase } from './supabase';
-import bcrypt from 'bcryptjs';
 import toast from 'react-hot-toast';
-
-// Admin credentials - in production, these should be environment variables
-const ADMIN_EMAIL = 'admin@mavryckevents.com';
-const ADMIN_PASSWORD = 'mavryck_events@admin0000';
 
 // Security configuration
 const SECURITY_CONFIG = {
@@ -142,50 +137,24 @@ export const login = async (email: string, password: string): Promise<boolean> =
       return false;
     }
     
-    // Verify credentials
-    if (sanitizedEmail !== ADMIN_EMAIL || sanitizedPassword !== ADMIN_PASSWORD) {
-      toast.error('Invalid credentials');
-      recordLoginAttempt(sanitizedEmail, false);
-      return false;
-    }
-    
-    // Authenticate with Supabase
+    // Authenticate with Supabase directly
     try {
-      // Try to sign in first
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: sanitizedEmail,
+        password: sanitizedPassword
       });
       
-      if (signInError) {
-        // If sign in fails, try to sign up (for first time setup)
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: ADMIN_EMAIL,
-          password: ADMIN_PASSWORD,
-          options: {
-            emailRedirectTo: undefined // Disable email confirmation
-          }
-        });
-        
-        if (signUpError && !signUpError.message.includes('already registered')) {
-          console.error('Authentication setup failed:', signUpError);
-          toast.error('Authentication setup failed. Please try again.');
-          recordLoginAttempt(sanitizedEmail, false);
-          return false;
-        }
-        
-        // Try to sign in again after signup
-        const { error: retrySignInError } = await supabase.auth.signInWithPassword({
-          email: ADMIN_EMAIL,
-          password: ADMIN_PASSWORD
-        });
-        
-        if (retrySignInError) {
-          console.error('Sign in after signup failed:', retrySignInError);
-          toast.error('Authentication failed. Please try again.');
-          recordLoginAttempt(sanitizedEmail, false);
-          return false;
-        }
+      if (error) {
+        console.error('Authentication failed:', error);
+        toast.error('Invalid credentials');
+        recordLoginAttempt(sanitizedEmail, false);
+        return false;
+      }
+      
+      if (!data.user) {
+        toast.error('Authentication failed');
+        recordLoginAttempt(sanitizedEmail, false);
+        return false;
       }
       
       // Create secure session
@@ -259,7 +228,7 @@ export const getLoginAttemptStats = () => {
     totalAttempts: recentAttempts.length,
     failedAttempts: recentAttempts.filter(a => !a.success).length,
     successfulAttempts: recentAttempts.filter(a => a.success).length,
-    isLocked: isRateLimited(ADMIN_EMAIL)
+    isLocked: false // Remove hardcoded email dependency
   };
 };
 
@@ -297,14 +266,80 @@ export const initializeAuth = async (): Promise<boolean> => {
       return false;
     }
     
-    if (data.session && data.session.user?.email === ADMIN_EMAIL) {
-      createSecureSession(ADMIN_EMAIL);
+    if (data.session && data.session.user?.email) {
+      createSecureSession(data.session.user.email);
       return true;
     }
     
     return false;
   } catch (error) {
     console.error('Auth initialization failed:', error);
+    return false;
+  }
+};
+
+// Get current user
+export const getCurrentUser = async () => {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Failed to get current user:', error);
+      return null;
+    }
+    return data.user;
+  } catch (error) {
+    console.error('Get user error:', error);
+    return null;
+  }
+};
+
+// Update user email
+export const updateUserEmail = async (newEmail: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase.auth.updateUser({
+      email: newEmail
+    });
+    
+    if (error) {
+      console.error('Email update error:', error);
+      toast.error('Failed to update email');
+      return false;
+    }
+    
+    // Update session data
+    const sessionData = getSessionData();
+    if (sessionData) {
+      sessionData.email = newEmail;
+      localStorage.setItem('sessionData', JSON.stringify(sessionData));
+    }
+    
+    toast.success('Email updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Email update error:', error);
+    toast.error('Failed to update email');
+    return false;
+  }
+};
+
+// Update user password
+export const updateUserPassword = async (newPassword: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    
+    if (error) {
+      console.error('Password update error:', error);
+      toast.error('Failed to update password');
+      return false;
+    }
+    
+    toast.success('Password updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Password update error:', error);
+    toast.error('Failed to update password');
     return false;
   }
 };

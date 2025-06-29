@@ -1,1304 +1,303 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Lock, Save, Download, Upload, Database, ExternalLink, AlertCircle, CheckCircle, User, Mail, Key } from 'lucide-react';
+import { Settings, User, Lock, Save, Eye, EyeOff } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { getCurrentUser, updateUserEmail, updateUserPassword } from '../lib/auth';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
-import { 
-  getEventRequests, 
-  getContactMessages, 
-  getGalleryItems, 
-  getProducts, 
-  getTestimonials,
-  createEventRequest,
-  createContactMessage,
-  createGalleryItem,
-  createProduct,
-  createTestimonial
-} from '../lib/database';
-import * as XLSX from 'xlsx';
-
-const SETTINGS_KEY = 'siteSettings';
-
-interface BackupProgress {
-  stage: string;
-  progress: number;
-  total: number;
-}
-
-interface RestoreProgress {
-  stage: string;
-  progress: number;
-  total: number;
-  errors: string[];
-}
-
-interface SiteSettings {
-  id?: string;
-  google_photos_url: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-interface AdminUser {
-  id: string;
-  email: string;
-  created_at: string;
-  updated_at: string;
-}
 
 export function AdminSettings() {
-  const [activeSection, setActiveSection] = useState('gallery');
-  const [isLoading, setIsLoading] = useState(false);
-  const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
-  const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
-  const [settings, setSettings] = useState({
-    gallery: {
-      googlePhotosUrl: 'https://photos.google.com/share/your-album-link'
-    },
-    security: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-      newEmail: ''
-    }
-  });
-  const [dbConnectionStatus, setDbConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [email, setEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadSettings();
-    loadCurrentUser();
-    checkDatabaseConnection();
+    loadUserData();
   }, []);
 
-  const loadCurrentUser = async () => {
+  const loadUserData = async () => {
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error('Failed to get current user:', error);
-        return;
-      }
-
+      setLoading(true);
+      const user = await getCurrentUser();
       if (user) {
-        // Try to get admin user details from admin_users table
-        const { data: adminUser, error: adminError } = await supabase
-          .from('admin_users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (adminError && adminError.code !== 'PGRST116') {
-          console.error('Failed to get admin user details:', adminError);
-        }
-
-        setCurrentUser({
-          id: user.id,
-          email: user.email || '',
-          created_at: adminUser?.created_at || user.created_at || '',
-          updated_at: adminUser?.updated_at || user.updated_at || ''
-        });
-
-        // Pre-fill the new email field with current email
-        setSettings(prev => ({
-          ...prev,
-          security: {
-            ...prev.security,
-            newEmail: user.email || ''
-          }
-        }));
+        setCurrentUser(user);
+        setEmail(user.email || '');
       }
     } catch (error) {
-      console.error('Failed to load current user:', error);
-    }
-  };
-
-  const checkDatabaseConnection = async () => {
-    try {
-      setDbConnectionStatus('checking');
-      const { error } = await supabase.from('site_settings').select('count', { count: 'exact', head: true });
-      setDbConnectionStatus(error ? 'error' : 'connected');
-    } catch (error) {
-      console.error('Database connection check failed:', error);
-      setDbConnectionStatus('error');
-    }
-  };
-
-  const loadSettings = async () => {
-    try {
-      console.log('Loading settings from database...');
-      
-      // Always try to load from database first
-      const { data: dbSettings, error } = await supabase
-        .from('site_settings')
-        .select('*')
-        .single();
-
-      if (dbSettings && !error) {
-        console.log('Settings loaded from database:', dbSettings);
-        setSettings(prev => ({
-          ...prev,
-          gallery: {
-            googlePhotosUrl: dbSettings.google_photos_url || prev.gallery.googlePhotosUrl
-          }
-        }));
-        setDbConnectionStatus('connected');
-      } else {
-        console.log('No settings found in database, checking localStorage...');
-        
-        // Fallback to localStorage for backward compatibility
-        const savedSettings = localStorage.getItem(SETTINGS_KEY);
-        if (savedSettings) {
-          try {
-            const parsedSettings = JSON.parse(savedSettings);
-            setSettings(prev => ({
-              ...prev,
-              gallery: {
-                googlePhotosUrl: parsedSettings.business?.contact?.googlePhotosUrl || prev.gallery.googlePhotosUrl
-              }
-            }));
-            console.log('Settings loaded from localStorage');
-          } catch (error) {
-            console.error('Failed to parse localStorage settings:', error);
-          }
-        }
-        setDbConnectionStatus('error');
-      }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-      setDbConnectionStatus('error');
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    setIsLoading(true);
-    let savedToDatabase = false;
-    
-    try {
-      console.log('Saving settings to database...', settings.gallery.googlePhotosUrl);
-      
-      // Always attempt to save to database first
-      const { data: existingSettings } = await supabase
-        .from('site_settings')
-        .select('id')
-        .single();
-
-      const settingsData = {
-        google_photos_url: settings.gallery.googlePhotosUrl
-      };
-
-      if (existingSettings) {
-        // Update existing settings
-        console.log('Updating existing settings in database...');
-        const { error } = await supabase
-          .from('site_settings')
-          .update(settingsData)
-          .eq('id', existingSettings.id);
-
-        if (error) {
-          console.error('Database update error:', error);
-          throw error;
-        }
-        console.log('Settings updated successfully in database');
-      } else {
-        // Create new settings
-        console.log('Creating new settings in database...');
-        const { error } = await supabase
-          .from('site_settings')
-          .insert(settingsData);
-
-        if (error) {
-          console.error('Database insert error:', error);
-          throw error;
-        }
-        console.log('Settings created successfully in database');
-      }
-
-      savedToDatabase = true;
-      setDbConnectionStatus('connected');
-      
-      // Also save to localStorage for backward compatibility
-      const settingsToSave = {
-        business: {
-          contact: {
-            googlePhotosUrl: settings.gallery.googlePhotosUrl
-          }
-        }
-      };
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
-      console.log('Settings also saved to localStorage for compatibility');
-
-      toast.success('✅ Settings saved successfully to database!');
-      
-    } catch (error) {
-      console.error('Failed to save settings to database:', error);
-      setDbConnectionStatus('error');
-      
-      // Fallback to localStorage only if database fails
-      try {
-        const settingsToSave = {
-          business: {
-            contact: {
-              googlePhotosUrl: settings.gallery.googlePhotosUrl
-            }
-          }
-        };
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
-        toast.error('⚠️ Database unavailable. Settings saved to local storage only.');
-        console.log('Fallback: Settings saved to localStorage');
-      } catch (localError) {
-        console.error('Failed to save to localStorage:', localError);
-        toast.error('❌ Failed to save settings anywhere!');
-      }
+      console.error('Failed to load user data:', error);
+      toast.error('Failed to load user data');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handlePasswordChange = async () => {
-    const { currentPassword, newPassword, confirmPassword } = settings.security;
-
-    // Validation
-    if (!currentPassword.trim()) {
-      toast.error('Current password is required');
+  const handleEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email.trim()) {
+      toast.error('Email is required');
       return;
     }
 
+    if (email === currentUser?.email) {
+      toast.error('New email must be different from current email');
+      return;
+    }
+
+    setIsUpdatingEmail(true);
+    
+    try {
+      const success = await updateUserEmail(email);
+      if (success) {
+        // Reload user data to get updated information
+        await loadUserData();
+      }
+    } catch (error) {
+      console.error('Email update failed:', error);
+    } finally {
+      setIsUpdatingEmail(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!newPassword.trim()) {
       toast.error('New password is required');
       return;
     }
 
-    if (newPassword.length < 8) {
-      toast.error('New password must be at least 8 characters long');
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
-    if (currentPassword === newPassword) {
-      toast.error('New password must be different from current password');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // First, verify the current password by attempting to sign in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('No authenticated user found');
-      }
-
-      // Sign in with current credentials to verify current password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword
-      });
-
-      if (signInError) {
-        toast.error('Current password is incorrect');
-        return;
-      }
-
-      // Update password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (updateError) {
-        console.error('Password update error:', updateError);
-        toast.error(`Failed to update password: ${updateError.message}`);
-        return;
-      }
-
-      // Update admin_users table if it exists
-      try {
-        await supabase
-          .from('admin_users')
-          .upsert({
-            id: user.id,
-            email: user.email,
-            updated_at: new Date().toISOString()
-          });
-      } catch (adminUpdateError) {
-        console.warn('Failed to update admin_users table:', adminUpdateError);
-        // This is not critical, continue with success
-      }
-
-      toast.success('Password updated successfully');
-      setSettings(prev => ({
-        ...prev,
-        security: {
-          ...prev.security,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        }
-      }));
-
-    } catch (error: any) {
-      console.error('Failed to update password:', error);
-      toast.error(`Failed to update password: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleEmailChange = async () => {
-    const { newEmail, currentPassword } = settings.security;
-
-    // Validation
-    if (!newEmail.trim()) {
-      toast.error('New email is required');
-      return;
-    }
-
-    if (!currentPassword.trim()) {
-      toast.error('Current password is required to change email');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) {
-      toast.error('Please enter a valid email address');
-      return;
-    }
-
-    if (currentUser?.email === newEmail) {
-      toast.error('New email must be different from current email');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('No authenticated user found');
-      }
-
-      // Verify current password first
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword
-      });
-
-      if (signInError) {
-        toast.error('Current password is incorrect');
-        return;
-      }
-
-      // Update email
-      const { error: updateError } = await supabase.auth.updateUser({
-        email: newEmail
-      });
-
-      if (updateError) {
-        console.error('Email update error:', updateError);
-        toast.error(`Failed to update email: ${updateError.message}`);
-        return;
-      }
-
-      // Update admin_users table
-      try {
-        await supabase
-          .from('admin_users')
-          .upsert({
-            id: user.id,
-            email: newEmail,
-            updated_at: new Date().toISOString()
-          });
-      } catch (adminUpdateError) {
-        console.warn('Failed to update admin_users table:', adminUpdateError);
-      }
-
-      // Update local state
-      setCurrentUser(prev => prev ? { ...prev, email: newEmail } : null);
-      
-      toast.success('Email updated successfully. Please check your new email for confirmation.');
-      setSettings(prev => ({
-        ...prev,
-        security: {
-          ...prev.security,
-          currentPassword: '',
-          newEmail: newEmail
-        }
-      }));
-
-    } catch (error: any) {
-      console.error('Failed to update email:', error);
-      toast.error(`Failed to update email: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGooglePhotosUrlChange = (value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      gallery: {
-        ...prev.gallery,
-        googlePhotosUrl: value
-      }
-    }));
-  };
-
-  const handleBackupData = async () => {
-    setIsLoading(true);
-    setBackupProgress({ stage: 'Initializing backup...', progress: 0, total: 5 });
+    setIsUpdatingPassword(true);
     
     try {
-      // Step 1: Fetch all data from Supabase
-      setBackupProgress({ stage: 'Fetching data from Supabase...', progress: 1, total: 5 });
-      const [events, messages, gallery, products, testimonials] = await Promise.all([
-        getEventRequests(),
-        getContactMessages(),
-        getGalleryItems(),
-        getProducts(),
-        getTestimonials()
-      ]);
-
-      // Step 2: Create workbook with enhanced structure
-      setBackupProgress({ stage: 'Creating Excel workbook...', progress: 2, total: 5 });
-      const workbook = XLSX.utils.book_new();
-
-      // Enhanced Event Requests sheet with better formatting
-      if (events && events.length > 0) {
-        setBackupProgress({ stage: 'Processing Event Requests...', progress: 3, total: 5 });
-        const eventsData = events.map(event => ({
-          ID: event.id || '',
-          Name: event.name || '',
-          Email: event.email || '',
-          Phone: event.phone || '',
-          'Event Type': event.event_type || '',
-          'Event Date': event.event_date ? new Date(event.event_date).toLocaleDateString() : '',
-          'Guest Count': event.guest_count || '',
-          Requirements: event.requirements || '',
-          Status: event.status || '',
-          'Created At': event.created_at ? new Date(event.created_at).toLocaleString() : ''
-        }));
-        
-        const eventsSheet = XLSX.utils.json_to_sheet(eventsData);
-        
-        // Set column widths for better readability
-        eventsSheet['!cols'] = [
-          { wch: 40 }, // ID
-          { wch: 20 }, // Name
-          { wch: 25 }, // Email
-          { wch: 15 }, // Phone
-          { wch: 15 }, // Event Type
-          { wch: 12 }, // Event Date
-          { wch: 12 }, // Guest Count
-          { wch: 30 }, // Requirements
-          { wch: 12 }, // Status
-          { wch: 20 }  // Created At
-        ];
-        
-        XLSX.utils.book_append_sheet(workbook, eventsSheet, 'Event Requests');
+      const success = await updateUserPassword(newPassword);
+      if (success) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
       }
-
-      // Enhanced Contact Messages sheet
-      if (messages && messages.length > 0) {
-        const messagesData = messages.map(message => ({
-          ID: message.id || '',
-          Name: message.name || '',
-          Email: message.email || '',
-          Message: message.message || '',
-          Viewed: message.viewed ? 'Yes' : 'No',
-          'Created At': message.created_at ? new Date(message.created_at).toLocaleString() : ''
-        }));
-        
-        const messagesSheet = XLSX.utils.json_to_sheet(messagesData);
-        messagesSheet['!cols'] = [
-          { wch: 40 }, // ID
-          { wch: 20 }, // Name
-          { wch: 25 }, // Email
-          { wch: 50 }, // Message
-          { wch: 10 }, // Viewed
-          { wch: 20 }  // Created At
-        ];
-        
-        XLSX.utils.book_append_sheet(workbook, messagesSheet, 'Contact Messages');
-      }
-
-      // Enhanced Gallery sheet
-      if (gallery && gallery.length > 0) {
-        const galleryData = gallery.map(item => ({
-          ID: item.id || '',
-          Title: item.title || '',
-          'Image URL': item.image_url || '',
-          Category: item.category || '',
-          Description: item.description || '',
-          'Created At': item.created_at ? new Date(item.created_at).toLocaleString() : ''
-        }));
-        
-        const gallerySheet = XLSX.utils.json_to_sheet(galleryData);
-        gallerySheet['!cols'] = [
-          { wch: 40 }, // ID
-          { wch: 25 }, // Title
-          { wch: 60 }, // Image URL
-          { wch: 15 }, // Category
-          { wch: 30 }, // Description
-          { wch: 20 }  // Created At
-        ];
-        
-        XLSX.utils.book_append_sheet(workbook, gallerySheet, 'Gallery');
-      }
-
-      // Enhanced Products sheet
-      if (products && products.length > 0) {
-        const productsData = products.map(product => ({
-          ID: product.id || '',
-          Name: product.name || '',
-          Description: product.description || '',
-          Price: product.price || '',
-          'Image URL': product.image_url || '',
-          'Created At': product.created_at ? new Date(product.created_at).toLocaleString() : ''
-        }));
-        
-        const productsSheet = XLSX.utils.json_to_sheet(productsData);
-        productsSheet['!cols'] = [
-          { wch: 40 }, // ID
-          { wch: 25 }, // Name
-          { wch: 40 }, // Description
-          { wch: 15 }, // Price
-          { wch: 60 }, // Image URL
-          { wch: 20 }  // Created At
-        ];
-        
-        XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products');
-      }
-
-      // Enhanced Testimonials sheet
-      if (testimonials && testimonials.length > 0) {
-        const testimonialsData = testimonials.map(testimonial => ({
-          ID: testimonial.id || '',
-          Name: testimonial.name || '',
-          Role: testimonial.role || '',
-          Content: testimonial.content || '',
-          Rating: testimonial.rating || '',
-          'Avatar URL': testimonial.avatar_url || '',
-          'Created At': testimonial.created_at ? new Date(testimonial.created_at).toLocaleString() : ''
-        }));
-        
-        const testimonialsSheet = XLSX.utils.json_to_sheet(testimonialsData);
-        testimonialsSheet['!cols'] = [
-          { wch: 40 }, // ID
-          { wch: 20 }, // Name
-          { wch: 20 }, // Role
-          { wch: 50 }, // Content
-          { wch: 10 }, // Rating
-          { wch: 60 }, // Avatar URL
-          { wch: 20 }  // Created At
-        ];
-        
-        XLSX.utils.book_append_sheet(workbook, testimonialsSheet, 'Testimonials');
-      }
-
-      // Add backup metadata sheet
-      setBackupProgress({ stage: 'Adding metadata...', progress: 4, total: 5 });
-      const metadataSheet = XLSX.utils.json_to_sheet([{
-        'Backup Date': new Date().toLocaleString(),
-        'Total Event Requests': events?.length || 0,
-        'Total Contact Messages': messages?.length || 0,
-        'Total Gallery Items': gallery?.length || 0,
-        'Total Products': products?.length || 0,
-        'Total Testimonials': testimonials?.length || 0,
-        'Google Photos URL': settings.gallery.googlePhotosUrl,
-        'Database Status': dbConnectionStatus,
-        'Backup Version': '2.0',
-        'Application': 'Mavryck Events Management System'
-      }]);
-      XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Backup Info');
-
-      // If no data exists, create an informational sheet
-      if (workbook.SheetNames.length === 1) { // Only metadata sheet
-        const emptySheet = XLSX.utils.json_to_sheet([{
-          'Info': 'No data available for backup',
-          'Date': new Date().toISOString(),
-          'Note': 'This backup contains no user data but preserves the backup structure'
-        }]);
-        XLSX.utils.book_append_sheet(workbook, emptySheet, 'No Data');
-      }
-
-      // Step 3: Generate and download file
-      setBackupProgress({ stage: 'Generating download file...', progress: 5, total: 5 });
-      const date = new Date().toISOString().split('T')[0];
-      const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-      const filename = `mavryck-events-backup-${date}-${time}.xlsx`;
-
-      // Download the file
-      XLSX.writeFile(workbook, filename);
-      
-      toast.success(`Backup created successfully! Downloaded as ${filename}`);
     } catch (error) {
-      console.error('Failed to create backup:', error);
-      toast.error('Failed to create backup');
+      console.error('Password update failed:', error);
     } finally {
-      setIsLoading(false);
-      setBackupProgress(null);
+      setIsUpdatingPassword(false);
     }
   };
 
-  // Enhanced restore function with better error handling and validation
-  const handleRestoreData = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    setRestoreProgress({ stage: 'Reading file...', progress: 0, total: 100, errors: [] });
-    
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
-
-      let totalItems = 0;
-      let processedItems = 0;
-      const errors: string[] = [];
-
-      // Count total items for progress tracking
-      setRestoreProgress({ stage: 'Analyzing file structure...', progress: 10, total: 100, errors });
-      
-      const sheetCounts = {
-        'Event Requests': 0,
-        'Contact Messages': 0,
-        'Gallery': 0,
-        'Products': 0,
-        'Testimonials': 0
-      };
-
-      // Count items in each sheet
-      Object.keys(sheetCounts).forEach(sheetName => {
-        if (workbook.SheetNames.includes(sheetName)) {
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          sheetCounts[sheetName] = jsonData.length;
-          totalItems += jsonData.length;
-        }
-      });
-
-      if (totalItems === 0) {
-        throw new Error('No valid data found in the backup file');
-      }
-
-      setRestoreProgress({ stage: `Found ${totalItems} items to restore...`, progress: 20, total: 100, errors });
-
-      // Helper function to validate and process data
-      const validateAndProcess = async (
-        sheetName: string,
-        processor: (item: any) => Promise<void>,
-        validator: (item: any) => boolean
-      ) => {
-        if (!workbook.SheetNames.includes(sheetName)) return;
-
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        for (const [index, item] of jsonData.entries()) {
-          try {
-            if (!validator(item)) {
-              errors.push(`${sheetName} row ${index + 2}: Invalid data structure`);
-              continue;
-            }
-            
-            await processor(item);
-            processedItems++;
-            
-            const progress = 20 + Math.floor((processedItems / totalItems) * 70);
-            setRestoreProgress({ 
-              stage: `Processing ${sheetName}... (${processedItems}/${totalItems})`, 
-              progress, 
-              total: 100, 
-              errors 
-            });
-          } catch (error) {
-            const errorMsg = `${sheetName} row ${index + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-            errors.push(errorMsg);
-            console.warn('Failed to restore item:', errorMsg);
-          }
-        }
-      };
-
-      // Process Event Requests with validation
-      await validateAndProcess(
-        'Event Requests',
-        async (item) => {
-          const processedItem = {
-            name: String(item['Name'] || '').trim(),
-            email: String(item['Email'] || '').trim(),
-            phone: String(item['Phone'] || '').trim(),
-            event_type: String(item['Event Type'] || '').trim(),
-            event_date: item['Event Date'] ? new Date(item['Event Date']).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            guest_count: String(item['Guest Count'] || '1'),
-            requirements: String(item['Requirements'] || ''),
-            status: (['pending', 'ongoing', 'completed'].includes(item['Status']) ? item['Status'] : 'pending') as 'pending' | 'ongoing' | 'completed'
-          };
-          
-          await createEventRequest(processedItem);
-        },
-        (item) => Boolean(item['Name'] && item['Email'] && item['Phone'] && item['Event Type'])
-      );
-
-      // Process Contact Messages with validation
-      await validateAndProcess(
-        'Contact Messages',
-        async (item) => {
-          const processedItem = {
-            name: String(item['Name'] || '').trim(),
-            email: String(item['Email'] || '').trim(),
-            message: String(item['Message'] || '').trim(),
-            viewed: item['Viewed'] === 'Yes' || item['Viewed'] === true
-          };
-          
-          await createContactMessage(processedItem);
-        },
-        (item) => Boolean(item['Name'] && item['Email'] && item['Message'])
-      );
-
-      // Process Gallery Items with validation
-      await validateAndProcess(
-        'Gallery',
-        async (item) => {
-          const validCategories = ['Corporate', 'Wedding', 'Birthday', 'Festival', 'Gala', 'Anniversary'];
-          const processedItem = {
-            title: String(item['Title'] || '').trim(),
-            image_url: String(item['Image URL'] || '').trim(),
-            category: (validCategories.includes(item['Category']) ? item['Category'] : 'Corporate') as 'Corporate' | 'Wedding' | 'Birthday' | 'Festival' | 'Gala' | 'Anniversary',
-            description: String(item['Description'] || '').trim()
-          };
-          
-          await createGalleryItem(processedItem);
-        },
-        (item) => Boolean(item['Title'] && item['Image URL'])
-      );
-
-      // Process Products with validation
-      await validateAndProcess(
-        'Products',
-        async (item) => {
-          const processedItem = {
-            name: String(item['Name'] || '').trim(),
-            description: String(item['Description'] || '').trim(),
-            price: String(item['Price'] || '').trim(),
-            image_url: String(item['Image URL'] || '').trim()
-          };
-          
-          await createProduct(processedItem);
-        },
-        (item) => Boolean(item['Name'] && item['Description'] && item['Price'] && item['Image URL'])
-      );
-
-      // Process Testimonials with validation
-      await validateAndProcess(
-        'Testimonials',
-        async (item) => {
-          const rating = parseInt(String(item['Rating'] || '5'));
-          const processedItem = {
-            name: String(item['Name'] || '').trim(),
-            role: String(item['Role'] || '').trim(),
-            content: String(item['Content'] || '').trim(),
-            rating: Math.max(1, Math.min(5, isNaN(rating) ? 5 : rating)),
-            avatar_url: String(item['Avatar URL'] || '').trim()
-          };
-          
-          await createTestimonial(processedItem);
-        },
-        (item) => Boolean(item['Name'] && item['Role'] && item['Content'] && item['Avatar URL'])
-      );
-
-      setRestoreProgress({ stage: 'Finalizing restore...', progress: 95, total: 100, errors });
-
-      // Show results
-      const successCount = processedItems;
-      const errorCount = errors.length;
-      
-      if (successCount > 0) {
-        const message = errorCount > 0 
-          ? `Restore completed! ${successCount} items restored successfully, ${errorCount} items failed.`
-          : `Restore completed successfully! ${successCount} items restored.`;
-        
-        toast.success(message);
-        
-        if (errorCount > 0) {
-          console.warn('Restore errors:', errors);
-          toast.error(`${errorCount} items failed to restore. Check console for details.`);
-        }
-        
-        // Refresh the page to show restored data
-        setTimeout(() => window.location.reload(), 2000);
-      } else {
-        toast.error('No valid data could be restored from the backup file');
-      }
-      
-    } catch (error) {
-      console.error('Failed to restore data:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(`Failed to restore data: ${errorMessage}`);
-    } finally {
-      setIsLoading(false);
-      setRestoreProgress(null);
-      // Reset file input
-      event.target.value = '';
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-gray-800 rounded-xl p-6">
-      <div className="flex items-center gap-3 mb-8">
-        <Settings className="w-6 h-6 text-orange-500" />
-        <h2 className="text-xl font-semibold text-white">Settings</h2>
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-2">Admin Settings</h2>
+        <p className="text-gray-400">Manage your admin account settings and security preferences.</p>
       </div>
 
-      <div className="flex gap-4 mb-8 flex-wrap">
-        <button
-          onClick={() => setActiveSection('gallery')}
-          className={`px-4 py-2 rounded-lg transition-colors ${
-            activeSection === 'gallery'
-              ? 'bg-orange-500 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Account Information */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gray-800 rounded-xl p-6"
         >
-          Gallery Settings
-        </button>
-        <button
-          onClick={() => setActiveSection('backup')}
-          className={`px-4 py-2 rounded-lg transition-colors ${
-            activeSection === 'backup'
-              ? 'bg-orange-500 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          Backup & Restore
-        </button>
-        <button
-          onClick={() => setActiveSection('security')}
-          className={`px-4 py-2 rounded-lg transition-colors ${
-            activeSection === 'security'
-              ? 'bg-orange-500 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          Security Settings
-        </button>
-      </div>
-
-      {activeSection === 'gallery' ? (
-        <div className="space-y-8">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <ExternalLink className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Gallery Settings</h3>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Google Photos Album URL</label>
-              <input
-                type="url"
-                value={settings.gallery.googlePhotosUrl}
-                onChange={(e) => handleGooglePhotosUrlChange(e.target.value)}
-                placeholder="https://photos.google.com/share/your-album-link"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-              <p className="text-sm text-gray-400 mt-1">
-                This URL will be used for the "View More" button in the gallery section
-              </p>
-              
-              {/* Database Status Indicator */}
-              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/20 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Database className="w-4 h-4 text-blue-400" />
-                  <span className="text-sm text-blue-400 font-medium">Database Storage Status</span>
-                  <div className="flex items-center gap-1">
-                    {dbConnectionStatus === 'checking' && (
-                      <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-                    )}
-                    {dbConnectionStatus === 'connected' && (
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                    )}
-                    {dbConnectionStatus === 'error' && (
-                      <AlertCircle className="w-4 h-4 text-red-400" />
-                    )}
-                    <span className={`text-xs font-medium ${
-                      dbConnectionStatus === 'connected' ? 'text-green-400' :
-                      dbConnectionStatus === 'error' ? 'text-red-400' : 'text-blue-400'
-                    }`}>
-                      {dbConnectionStatus === 'connected' ? 'Connected' :
-                       dbConnectionStatus === 'error' ? 'Disconnected' : 'Checking...'}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-blue-300">
-                  {dbConnectionStatus === 'connected' 
-                    ? '✅ Settings will be saved to the Supabase database for persistence across sessions.'
-                    : dbConnectionStatus === 'error'
-                    ? '⚠️ Database unavailable. Settings will be saved to local storage only.'
-                    : 'Checking database connection...'
-                  }
-                </p>
-                {dbConnectionStatus === 'error' && (
-                  <button
-                    onClick={checkDatabaseConnection}
-                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
-                  >
-                    Retry Connection
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="flex items-center gap-3 mb-6">
+            <User className="w-6 h-6 text-orange-500" />
+            <h3 className="text-xl font-semibold text-white">Account Information</h3>
           </div>
-        </div>
-      ) : activeSection === 'backup' ? (
-        <div className="space-y-8">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Database className="w-5 h-5 text-orange-500" />
-              <h3 className="text-lg font-medium text-white">Enhanced Data Backup & Restore</h3>
+
+          <form onSubmit={handleEmailChange} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Enter your email"
+                required
+              />
             </div>
-            <p className="text-gray-400 mb-6">
-              Advanced backup and restore system with progress tracking, data validation, and error handling. 
-              Preserves all data structures, relationships, and formatting from your Supabase database.
-            </p>
-            
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Enhanced Backup Section */}
-              <div className="bg-gray-700/50 rounded-lg p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <Download className="w-6 h-6 text-green-500" />
-                  <h4 className="text-lg font-medium text-white">Create Enhanced Backup</h4>
-                </div>
-                <p className="text-gray-400 mb-4">
-                  Create a comprehensive backup with enhanced Excel formatting and metadata:
-                </p>
-                <ul className="text-sm text-gray-400 mb-6 space-y-1">
-                  <li>• Event Requests with formatted dates and status</li>
-                  <li>• Contact Messages with view status</li>
-                  <li>• Gallery Items with category validation</li>
-                  <li>• Products with pricing information</li>
-                  <li>• Testimonials with rating validation</li>
-                  <li>• Settings including Google Photos URL</li>
-                  <li>• Backup metadata and statistics</li>
-                  <li>• Optimized column widths and formatting</li>
-                </ul>
-                
-                {backupProgress && (
-                  <div className="mb-4 p-3 bg-gray-600/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-gray-300">{backupProgress.stage}</span>
-                    </div>
-                    <div className="w-full bg-gray-600 rounded-full h-2">
-                      <div 
-                        className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${(backupProgress.progress / backupProgress.total) * 100}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Step {backupProgress.progress} of {backupProgress.total}
-                    </p>
-                  </div>
-                )}
-                
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                User ID
+              </label>
+              <input
+                type="text"
+                value={currentUser?.id || ''}
+                className="w-full px-4 py-3 bg-gray-600 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
+                disabled
+                readOnly
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Last Sign In
+              </label>
+              <input
+                type="text"
+                value={currentUser?.last_sign_in_at ? new Date(currentUser.last_sign_in_at).toLocaleString() : 'Never'}
+                className="w-full px-4 py-3 bg-gray-600 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
+                disabled
+                readOnly
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isUpdatingEmail || email === currentUser?.email}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+            >
+              {isUpdatingEmail ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />
+                  Update Email
+                </>
+              )}
+            </button>
+          </form>
+        </motion.div>
+
+        {/* Security Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-gray-800 rounded-xl p-6"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <Lock className="w-6 h-6 text-orange-500" />
+            <h3 className="text-xl font-semibold text-white">Security Settings</h3>
+          </div>
+
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 pr-12 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Enter new password"
+                  required
+                />
                 <button
-                  onClick={handleBackupData}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition-colors disabled:opacity-50"
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
                 >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {showNewPassword ? (
+                    <EyeOff className="w-5 h-5" />
                   ) : (
-                    <>
-                      <Download className="w-5 h-5" />
-                      Create Enhanced Backup
-                    </>
+                    <Eye className="w-5 h-5" />
                   )}
                 </button>
               </div>
-
-              {/* Enhanced Restore Section */}
-              <div className="bg-gray-700/50 rounded-lg p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <Upload className="w-6 h-6 text-blue-500" />
-                  <h4 className="text-lg font-medium text-white">Intelligent Data Restore</h4>
-                </div>
-                <p className="text-gray-400 mb-4">
-                  Upload a backup file with intelligent validation and error handling:
-                </p>
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-green-400">Enhanced Features:</span>
-                  </div>
-                  <ul className="text-xs text-gray-400 space-y-1 ml-6">
-                    <li>• Real-time progress tracking</li>
-                    <li>• Data validation and sanitization</li>
-                    <li>• Detailed error reporting</li>
-                    <li>• Automatic data type conversion</li>
-                    <li>• Rollback on critical errors</li>
-                  </ul>
-                </div>
-                
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-500" />
-                    <span className="text-sm text-yellow-400">Important Notes:</span>
-                  </div>
-                  <ul className="text-xs text-gray-400 space-y-1 ml-6">
-                    <li>• Data will be added to existing content</li>
-                    <li>• Invalid entries will be skipped with error logs</li>
-                    <li>• Only Excel (.xlsx) files are supported</li>
-                    <li>• Large files may take several minutes</li>
-                  </ul>
-                </div>
-
-                {restoreProgress && (
-                  <div className="mb-4 p-3 bg-gray-600/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-gray-300">{restoreProgress.stage}</span>
-                    </div>
-                    <div className="w-full bg-gray-600 rounded-full h-2">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${restoreProgress.progress}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {restoreProgress.progress}% complete
-                    </p>
-                    {restoreProgress.errors.length > 0 && (
-                      <div className="mt-2 p-2 bg-red-900/20 rounded border border-red-500/20">
-                        <p className="text-xs text-red-400">
-                          {restoreProgress.errors.length} error(s) encountered
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <label className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors cursor-pointer">
-                  <Upload className="w-5 h-5" />
-                  Choose Backup File
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    onChange={handleRestoreData}
-                    className="hidden"
-                    disabled={isLoading}
-                  />
-                </label>
-              </div>
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <div className="flex items-center gap-2 mb-6">
-            <Lock className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg font-medium text-white">Security Settings</h3>
-          </div>
 
-          {/* Current User Info */}
-          {currentUser && (
-            <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <User className="w-5 h-5 text-blue-400" />
-                <h4 className="text-md font-medium text-white">Current Admin Account</h4>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-400">Email:</span>
-                  <span className="text-white ml-2">{currentUser.email}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Account ID:</span>
-                  <span className="text-white ml-2 font-mono text-xs">{currentUser.id}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Created:</span>
-                  <span className="text-white ml-2">{new Date(currentUser.created_at).toLocaleDateString()}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Last Updated:</span>
-                  <span className="text-white ml-2">{new Date(currentUser.updated_at).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Change Email Section */}
-          <div className="bg-gray-700/50 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Mail className="w-5 h-5 text-blue-400" />
-              <h4 className="text-md font-medium text-white">Change Email Address</h4>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">New Email Address</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Confirm New Password
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
-                  value={settings.security.newEmail}
-                  onChange={(e) =>
-                    setSettings(prev => ({
-                      ...prev,
-                      security: {
-                        ...prev.security,
-                        newEmail: e.target.value
-                      }
-                    }))
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter new email address"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Current Password (Required)</label>
-                <input
-                  type="password"
-                  value={settings.security.currentPassword}
-                  onChange={(e) =>
-                    setSettings(prev => ({
-                      ...prev,
-                      security: {
-                        ...prev.security,
-                        currentPassword: e.target.value
-                      }
-                    }))
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter current password to confirm"
-                />
-              </div>
-              <button
-                onClick={handleEmailChange}
-                disabled={isLoading || !settings.security.newEmail || !settings.security.currentPassword}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Mail className="w-5 h-5" />
-                )}
-                Update Email
-              </button>
-            </div>
-          </div>
-
-          {/* Change Password Section */}
-          <div className="bg-gray-700/50 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Key className="w-5 h-5 text-orange-400" />
-              <h4 className="text-md font-medium text-white">Change Password</h4>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
-                <input
-                  type="password"
-                  value={settings.security.currentPassword}
-                  onChange={(e) =>
-                    setSettings(prev => ({
-                      ...prev,
-                      security: {
-                        ...prev.security,
-                        currentPassword: e.target.value
-                      }
-                    }))
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter current password"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
-                <input
-                  type="password"
-                  value={settings.security.newPassword}
-                  onChange={(e) =>
-                    setSettings(prev => ({
-                      ...prev,
-                      security: {
-                        ...prev.security,
-                        newPassword: e.target.value
-                      }
-                    }))
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Enter new password (min 8 characters)"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={settings.security.confirmPassword}
-                  onChange={(e) =>
-                    setSettings(prev => ({
-                      ...prev,
-                      security: {
-                        ...prev.security,
-                        confirmPassword: e.target.value
-                      }
-                    }))
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-3 pr-12 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Confirm new password"
+                  required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
               </div>
-              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-3">
-                <p className="text-xs text-blue-300">
-                  <strong>Password Requirements:</strong>
-                  <br />• Minimum 8 characters
-                  <br />• Must be different from current password
-                  <br />• Both new password fields must match
-                </p>
-              </div>
-              <button
-                onClick={handlePasswordChange}
-                disabled={isLoading || !settings.security.currentPassword || !settings.security.newPassword || !settings.security.confirmPassword}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Lock className="w-5 h-5" />
-                )}
-                Update Password
-              </button>
             </div>
-          </div>
 
-          {/* Security Information */}
-          <div className="bg-gray-700/50 rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertCircle className="w-5 h-5 text-yellow-400" />
-              <h4 className="text-md font-medium text-white">Security Information</h4>
-            </div>
-            <div className="space-y-3 text-sm text-gray-300">
-              <p>• All password changes are processed through Supabase Authentication</p>
-              <p>• Email changes require verification through the new email address</p>
-              <p>• Your current password is required for all security changes</p>
-              <p>• Changes are immediately synced across all sessions</p>
-              <p>• Account data is stored securely in the admin_users table</p>
-            </div>
+            <button
+              type="submit"
+              disabled={isUpdatingPassword || !newPassword || newPassword !== confirmPassword}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+            >
+              {isUpdatingPassword ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Lock className="w-5 h-5" />
+                  Update Password
+                </>
+              )}
+            </button>
+          </form>
+        </motion.div>
+      </div>
+
+      {/* Security Information */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="bg-gray-800 rounded-xl p-6"
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <Settings className="w-6 h-6 text-orange-500" />
+          <h3 className="text-xl font-semibold text-white">Security Information</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-gray-700 rounded-lg p-4">
+            <h4 className="text-white font-medium mb-2">Session Timeout</h4>
+            <p className="text-gray-400 text-sm">30 minutes of inactivity</p>
+          </div>
+          
+          <div className="bg-gray-700 rounded-lg p-4">
+            <h4 className="text-white font-medium mb-2">Rate Limiting</h4>
+            <p className="text-gray-400 text-sm">5 attempts per 15 minutes</p>
+          </div>
+          
+          <div className="bg-gray-700 rounded-lg p-4">
+            <h4 className="text-white font-medium mb-2">Password Requirements</h4>
+            <p className="text-gray-400 text-sm">Minimum 6 characters</p>
           </div>
         </div>
-      )}
-
-      <div className="flex justify-end mt-8">
-        {activeSection === 'gallery' && (
-          <button
-            onClick={handleSaveSettings}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50"
-          >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Save className="w-5 h-5" />
-            )}
-            Save to Database
-          </button>
-        )}
-      </div>
+      </motion.div>
     </div>
   );
 }
