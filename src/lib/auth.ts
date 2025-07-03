@@ -824,7 +824,7 @@ export const getGooglePhotosUrl = async (): Promise<string> => {
     
     if (error) {
       console.error('Error fetching Google Photos URL:', error);
-      return 'https://photos.google.com/share/your-album-link';
+      return 'https://kailash-gupta.github.io/Event-Gallery/';
     }
     
     if (data && data.length > 0 && data[0].google_photos_url) {
@@ -833,9 +833,9 @@ export const getGooglePhotosUrl = async (): Promise<string> => {
     }
     
     console.log('No Google Photos URL found, using default');
-    return 'https://photos.google.com/share/your-album-link';
+    return 'https://kailash-gupta.github.io/Event-Gallery/';
   } catch (error) {
     console.error('Error fetching Google Photos URL:', error);
-    return 'https://photos.google.com/share/your-album-link';
+    return 'https://kailash-gupta.github.io/Event-Gallery/';
   }
 };
