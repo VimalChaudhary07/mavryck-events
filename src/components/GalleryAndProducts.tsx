@@ -13,7 +13,7 @@ export function GalleryAndProducts() {
   const [showLightbox, setShowLightbox] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
-  const [googlePhotosUrl, setGooglePhotosUrl] = useState('https://photos.google.com/share/your-album-link');
+  const [googlePhotosUrl, setGooglePhotosUrl] = useState('https://kailash-gupta.github.io/Event-Gallery/');
   const [loading, setLoading] = useState(true);
   const [imageLoadingStates, setImageLoadingStates] = useState<Record<string, boolean>>({});
 
